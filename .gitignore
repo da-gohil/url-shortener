@@ -1,0 +1,10 @@
+# Environment & Secrets
+.env
+*.env
+
+# Build outputs & dependencies
+.idea/
+target/
+build/
+node_modules/
+.DS_Store
