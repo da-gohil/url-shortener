@@ -43,7 +43,7 @@
                     <a th:href="${url.originalUrl}" th:text="${#strings.abbreviate(url.originalUrl, 50)}"
                        target="_blank"></a>
                 </td>
-                <!-- <td th:text="${url.createdBy != null ? url.createdBy.name : 'Guest'}"></td>-->
+                 <td th:text="${url.createdBy != null ? url.createdBy.name : 'Guest'}"></td>
                 <td th:text="${#temporals.format(url.createdAt, 'yyyy-MM-dd HH:mm')}"></td>
                 <td th:text="${url.expiresAt != null ? #temporals.format(url.expiresAt, 'yyyy-MM-dd HH:mm') : 'Never'}"></td>
             </tr>
