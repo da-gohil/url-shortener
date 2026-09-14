@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 public class HealthCheckController {
 
     @GetMapping("/ping")
-    public String ping(){
+    public String ping() {
         return "URL Shortener Service is up and running";
     }
 }
