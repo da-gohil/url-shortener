@@ -6,6 +6,7 @@ import com.darshangohil.urlshortener.domain.exception.SelfModificationException;
 import com.darshangohil.urlshortener.domain.exception.UserNotFoundException;
 import com.darshangohil.urlshortener.support.TestFixtures;
 import com.darshangohil.urlshortener.domain.exception.EmailAlreadyExistsException;
+import com.darshangohil.urlshortener.domain.models.AuditAction;
 import com.darshangohil.urlshortener.domain.models.CreateUserCmd;
 import com.darshangohil.urlshortener.domain.models.Role;
 import com.darshangohil.urlshortener.domain.repository.UserRepository;
@@ -24,11 +25,13 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 class UserServiceTest {
 
     private UserRepository userRepository;
     private ActiveSessions activeSessions;
+    private AuditLog auditLog;
     private UserService service;
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
@@ -36,9 +39,10 @@ class UserServiceTest {
     void setUp() {
         userRepository = mock(UserRepository.class);
         activeSessions = mock(ActiveSessions.class);
+        auditLog = mock(AuditLog.class);
         var properties = new ApplicationProperties("http://localhost:8080", 30, false, 10);
         service = new UserService(userRepository, new EntityMapper(), passwordEncoder,
-                properties, activeSessions);
+                properties, activeSessions, auditLog);
     }
 
     // --- admin: roles and accounts (who may call these: UserServiceSecurityTest) -------
@@ -51,6 +55,8 @@ class UserServiceTest {
 
         assertThat(john.getRole()).isEqualTo(Role.ROLE_ADMIN);
         verify(activeSessions).endAllFor("john.doe@example.com");
+        verify(auditLog).record(AuditAction.USER_ROLE_CHANGED, 2L,
+                "John Doe <john.doe@example.com>: user → admin");
     }
 
     @Test
@@ -61,6 +67,7 @@ class UserServiceTest {
 
         assertThat(john.getEnabled()).isFalse();
         verify(activeSessions).endAllFor("john.doe@example.com");
+        verify(auditLog).record(AuditAction.USER_DISABLED, 2L, "John Doe <john.doe@example.com>");
     }
 
     @Test
@@ -86,6 +93,7 @@ class UserServiceTest {
         assertThat(admin.getRole()).isEqualTo(Role.ROLE_ADMIN);
         assertThat(admin.getEnabled()).isTrue();
         verify(activeSessions, never()).endAllFor(any());
+        verifyNoInteractions(auditLog);
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.darshangohil.urlshortener.web.controllers;
 
 import com.darshangohil.urlshortener.ApplicationProperties;
+import com.darshangohil.urlshortener.domain.entities.AuditEvent;
 import com.darshangohil.urlshortener.domain.exception.SelfModificationException;
 import com.darshangohil.urlshortener.domain.models.OwnerFilter;
 import com.darshangohil.urlshortener.domain.models.PagedResult;
@@ -10,6 +11,7 @@ import com.darshangohil.urlshortener.domain.models.Role;
 import com.darshangohil.urlshortener.domain.models.UserDto;
 import com.darshangohil.urlshortener.domain.models.UserSummary;
 import com.darshangohil.urlshortener.domain.services.AdminOverviewService;
+import com.darshangohil.urlshortener.domain.services.AuditLog;
 import com.darshangohil.urlshortener.domain.services.ShortUrlService;
 import com.darshangohil.urlshortener.domain.services.UserService;
 import com.darshangohil.urlshortener.web.utils.FilterLinks;
@@ -39,19 +41,24 @@ public class AdminController {
     private final ShortUrlService shortUrlService;
     private final UserService userService;
     private final AdminOverviewService adminOverviewService;
+    private final AuditLog auditLog;
     private final SecurityUtils securityUtils;
     private final String baseUrl;
+    private final int pageSize;
 
     public AdminController(ShortUrlService shortUrlService,
                            UserService userService,
                            AdminOverviewService adminOverviewService,
+                           AuditLog auditLog,
                            SecurityUtils securityUtils,
                            ApplicationProperties properties) {
         this.shortUrlService = shortUrlService;
         this.userService = userService;
         this.adminOverviewService = adminOverviewService;
+        this.auditLog = auditLog;
         this.securityUtils = securityUtils;
         this.baseUrl = properties.baseUrl();
+        this.pageSize = properties.pageSize();
     }
 
     @GetMapping("/dashboard")
@@ -206,6 +213,25 @@ public class AdminController {
             link.queryParam("page", page);
         }
         return link.encode().toUriString();
+    }
+
+    // --- audit log -------------------------------------------------------------------
+
+    @GetMapping("/audit")
+    public String audit(@RequestParam(defaultValue = "1") int page, Model model) {
+        if (page < 1) {
+            return "redirect:/admin/audit";
+        }
+        // twice the usual page size: entries are one short line each
+        PagedResult<AuditEvent> events = auditLog.findEvents(page, pageSize * 2);
+        if (events.isBeyondLastPage()) {
+            return "redirect:/admin/audit?page=" + events.totalPages();
+        }
+        model.addAttribute("events", events);
+        model.addAttribute("activeNav", "admin");
+        model.addAttribute("adminTab", "audit");
+        model.addAttribute("paginationUrl", "/admin/audit");
+        return "admin/audit";
     }
 
     @PostMapping("/delete-urls")

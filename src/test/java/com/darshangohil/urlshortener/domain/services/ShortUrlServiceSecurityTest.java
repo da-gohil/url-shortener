@@ -62,6 +62,7 @@ class ShortUrlServiceSecurityTest {
     @Autowired RoleHierarchy roleHierarchy;
     @MockitoBean ShortUrlRepository shortUrlRepository;
     @MockitoBean UserRepository userRepository;
+    @MockitoBean AuditLog auditLog;
     @MockitoBean UrlExistenceValidator urlExistenceValidator;
 
     private final User admin = TestFixtures.user(1L, "Admin User", Role.ROLE_ADMIN);

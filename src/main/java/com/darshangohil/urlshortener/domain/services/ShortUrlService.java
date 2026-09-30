@@ -4,6 +4,7 @@ import com.darshangohil.urlshortener.ApplicationProperties;
 import com.darshangohil.urlshortener.domain.entities.ShortUrl;
 import com.darshangohil.urlshortener.domain.exception.InvalidUrlException;
 import com.darshangohil.urlshortener.domain.exception.ShortUrlNotFoundException;
+import com.darshangohil.urlshortener.domain.models.AuditAction;
 import com.darshangohil.urlshortener.domain.models.CreateShortUrlCmd;
 import com.darshangohil.urlshortener.domain.models.OwnerFilter;
 import com.darshangohil.urlshortener.domain.models.PagedResult;
@@ -24,7 +25,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -45,16 +49,19 @@ public class ShortUrlService {
     private final ApplicationProperties properties;
     private final UrlExistenceValidator urlExistenceValidator;
     private final UserRepository userRepository;
+    private final AuditLog auditLog;
 
     public ShortUrlService(ShortUrlRepository shortUrlRepository,
                            EntityMapper entityMapper,
                            ApplicationProperties properties,
-                           UrlExistenceValidator urlExistenceValidator, UserRepository userRepository) {
+                           UrlExistenceValidator urlExistenceValidator, UserRepository userRepository,
+                           AuditLog auditLog) {
         this.shortUrlRepository = shortUrlRepository;
         this.entityMapper = entityMapper;
         this.properties = properties;
         this.urlExistenceValidator = urlExistenceValidator;
         this.userRepository = userRepository;
+        this.auditLog = auditLog;
     }
 
     public PagedResult<ShortUrlDto> findAllPublicShortUrls(int pageNo) {
@@ -188,6 +195,8 @@ public class ShortUrlService {
     @Transactional
     public ShortUrlDto updateShortUrl(Long id, UpdateShortUrlCmd cmd) {
         ShortUrl shortUrl = findOrThrow(id);
+        boolean wasPrivate = Boolean.TRUE.equals(shortUrl.getIsPrivate());
+        Instant oldExpiry = shortUrl.getExpiresAt();
 
         shortUrl.setIsPrivate(shortUrl.getCreatedBy() != null && cmd.isPrivate());
         switch (cmd.expiry()) {
@@ -196,6 +205,8 @@ public class ShortUrlService {
             case DAYS -> shortUrl.setExpiresAt(Instant.now().plus(
                     Objects.requireNonNull(cmd.expirationInDays(), "expirationInDays"), ChronoUnit.DAYS));
         }
+        auditLog.record(AuditAction.LINK_EDITED, id,
+                describeEdit(shortUrl, wasPrivate, oldExpiry));
         return entityMapper.toShortUrlDto(shortUrl);
     }
 
@@ -209,6 +220,8 @@ public class ShortUrlService {
     public ShortUrlDto setDisabled(Long id, boolean disabled) {
         ShortUrl shortUrl = findOrThrow(id);
         shortUrl.setDisabled(disabled);
+        auditLog.record(disabled ? AuditAction.LINK_DISABLED : AuditAction.LINK_ENABLED, id,
+                shortUrl.getShortKey() + " → " + shortUrl.getOriginalUrl());
         return entityMapper.toShortUrlDto(shortUrl);
     }
 
@@ -228,7 +241,35 @@ public class ShortUrlService {
         if (ids == null || ids.isEmpty()) {
             return;
         }
-        shortUrlRepository.deleteAll(shortUrlRepository.findAllByIdIn(ids));
+        List<ShortUrl> shortUrls = shortUrlRepository.findAllByIdIn(ids);
+        // one entry per link; the row is gone afterwards, so the summary keeps its key
+        shortUrls.forEach(shortUrl -> auditLog.record(AuditAction.LINK_DELETED, shortUrl.getId(),
+                shortUrl.getShortKey() + " → " + shortUrl.getOriginalUrl()));
+        shortUrlRepository.deleteAll(shortUrls);
+    }
+
+    private static final DateTimeFormatter AUDIT_TIME =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm 'UTC'").withZone(ZoneOffset.UTC);
+
+    /** e.g. "aB3xZ9: public → private; expiry never → 2026-10-07 14:00 UTC". */
+    private static String describeEdit(ShortUrl shortUrl, boolean wasPrivate, Instant oldExpiry) {
+        List<String> changes = new ArrayList<>();
+        boolean isPrivate = Boolean.TRUE.equals(shortUrl.getIsPrivate());
+        if (wasPrivate != isPrivate) {
+            changes.add(visibility(wasPrivate) + " → " + visibility(isPrivate));
+        }
+        if (!Objects.equals(oldExpiry, shortUrl.getExpiresAt())) {
+            changes.add("expiry " + expiry(oldExpiry) + " → " + expiry(shortUrl.getExpiresAt()));
+        }
+        return shortUrl.getShortKey() + ": " + (changes.isEmpty() ? "no changes" : String.join("; ", changes));
+    }
+
+    private static String visibility(boolean isPrivate) {
+        return isPrivate ? "private" : "public";
+    }
+
+    private static String expiry(Instant expiresAt) {
+        return expiresAt == null ? "never" : AUDIT_TIME.format(expiresAt);
     }
 
     public static String generateRandomShortKey() {

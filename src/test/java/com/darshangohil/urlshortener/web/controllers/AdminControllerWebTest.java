@@ -14,6 +14,9 @@ import com.darshangohil.urlshortener.domain.models.UserDto;
 import com.darshangohil.urlshortener.domain.models.UserSummary;
 import com.darshangohil.urlshortener.domain.exception.SelfModificationException;
 import com.darshangohil.urlshortener.domain.services.AdminOverviewService;
+import com.darshangohil.urlshortener.domain.services.AuditLog;
+import com.darshangohil.urlshortener.domain.entities.AuditEvent;
+import com.darshangohil.urlshortener.domain.models.AuditAction;
 import com.darshangohil.urlshortener.domain.services.ShortUrlService;
 import com.darshangohil.urlshortener.domain.services.UserService;
 import com.darshangohil.urlshortener.domain.models.SecurityUser;
@@ -59,6 +62,7 @@ class AdminControllerWebTest {
     @MockitoBean ShortUrlService shortUrlService;
     @MockitoBean UserService userService;
     @MockitoBean AdminOverviewService adminOverviewService;
+    @MockitoBean AuditLog auditLog;
 
     // --- access ----------------------------------------------------------------------
 
@@ -272,6 +276,30 @@ class AdminControllerWebTest {
         mockMvc.perform(get("/admin/users").with(user(JOHN))).andExpect(status().isForbidden());
         mockMvc.perform(post("/admin/users/3/disable").with(csrf()).with(user(JOHN)))
                 .andExpect(status().isForbidden());
+    }
+
+    // --- audit log -------------------------------------------------------------------
+
+    @Test
+    void theAuditLogListsEntriesNewestFirst() throws Exception {
+        given(auditLog.findEvents(1, 20)).willReturn(TestFixtures.onePage(List.of(
+                new AuditEvent(java.time.Instant.parse("2026-09-30T12:00:00Z"), 1L, "admin@example.com",
+                        AuditAction.USER_DISABLED, 2L, "John Doe <john.doe@example.com>"),
+                new AuditEvent(java.time.Instant.parse("2026-09-30T11:00:00Z"), 2L, "john.doe@example.com",
+                        AuditAction.LINK_EDITED, 9L, "mine01: public → private"))));
+
+        mockMvc.perform(get("/admin/audit").with(user(ADMIN)))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("<title>Admin · Audit log</title>")))
+                .andExpect(content().string(containsString("Disabled account")))
+                .andExpect(content().string(containsString("John Doe &lt;john.doe@example.com&gt;")))
+                .andExpect(content().string(containsString("href=\"/admin/links?owner=2\"")))
+                .andExpect(content().string(containsString("mine01: public → private")));
+    }
+
+    @Test
+    void ordinaryUserCannotReadTheAuditLog() throws Exception {
+        mockMvc.perform(get("/admin/audit").with(user(JOHN))).andExpect(status().isForbidden());
     }
 
     @Test

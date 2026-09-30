@@ -41,6 +41,7 @@ class UserServiceSecurityTest {
 
     @Autowired UserService service;
     @MockitoBean UserRepository userRepository;
+    @MockitoBean AuditLog auditLog;
     @MockitoBean ActiveSessions activeSessions;
 
     @AfterEach

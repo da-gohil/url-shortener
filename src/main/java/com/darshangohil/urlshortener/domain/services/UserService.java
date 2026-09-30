@@ -3,6 +3,7 @@ package com.darshangohil.urlshortener.domain.services;
 import com.darshangohil.urlshortener.ApplicationProperties;
 import com.darshangohil.urlshortener.domain.exception.SelfModificationException;
 import com.darshangohil.urlshortener.domain.exception.UserNotFoundException;
+import com.darshangohil.urlshortener.domain.models.AuditAction;
 import com.darshangohil.urlshortener.domain.models.PagedResult;
 import com.darshangohil.urlshortener.domain.models.UserSummary;
 import org.springframework.data.domain.PageRequest;
@@ -34,17 +35,20 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final ApplicationProperties properties;
     private final ActiveSessions activeSessions;
+    private final AuditLog auditLog;
 
     public UserService(UserRepository userRepository,
                        EntityMapper entityMapper,
                        PasswordEncoder passwordEncoder,
                        ApplicationProperties properties,
-                       ActiveSessions activeSessions) {
+                       ActiveSessions activeSessions,
+                       AuditLog auditLog) {
         this.userRepository = userRepository;
         this.entityMapper = entityMapper;
         this.passwordEncoder = passwordEncoder;
         this.properties = properties;
         this.activeSessions = activeSessions;
+        this.auditLog = auditLog;
     }
 
     /** @param pageNo 1-based, like every other listing */
@@ -64,7 +68,10 @@ public class UserService {
     public UserDto changeRole(Long userId, Role role, Long actingUserId) {
         User user = findOrThrow(userId);
         refuseSelf(userId, actingUserId, "change your own role");
+        Role oldRole = user.getRole();
         user.setRole(role);
+        auditLog.record(AuditAction.USER_ROLE_CHANGED, userId,
+                who(user) + ": " + roleName(oldRole) + " → " + roleName(role));
         activeSessions.endAllFor(user.getEmail());
         return entityMapper.toUserDto(user);
     }
@@ -80,10 +87,19 @@ public class UserService {
         User user = findOrThrow(userId);
         refuseSelf(userId, actingUserId, enabled ? "re-enable your own account" : "disable your own account");
         user.setEnabled(enabled);
+        auditLog.record(enabled ? AuditAction.USER_ENABLED : AuditAction.USER_DISABLED, userId, who(user));
         if (!enabled) {
             activeSessions.endAllFor(user.getEmail());
         }
         return entityMapper.toUserDto(user);
+    }
+
+    private static String who(User user) {
+        return user.getName() + " <" + user.getEmail() + ">";
+    }
+
+    private static String roleName(Role role) {
+        return role == Role.ROLE_ADMIN ? "admin" : "user";
     }
 
     private static void refuseSelf(Long userId, Long actingUserId, String what) {

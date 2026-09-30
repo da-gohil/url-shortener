@@ -4,6 +4,7 @@ import com.darshangohil.urlshortener.ApplicationProperties;
 import com.darshangohil.urlshortener.domain.entities.ShortUrl;
 import com.darshangohil.urlshortener.domain.entities.User;
 import com.darshangohil.urlshortener.domain.exception.ShortUrlNotFoundException;
+import com.darshangohil.urlshortener.domain.models.AuditAction;
 import com.darshangohil.urlshortener.domain.models.Role;
 import com.darshangohil.urlshortener.domain.models.UpdateShortUrlCmd;
 import com.darshangohil.urlshortener.domain.models.UpdateShortUrlCmd.Expiry;
@@ -26,10 +27,12 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 class ShortUrlServiceTest {
 
     private ShortUrlRepository shortUrlRepository;
+    private AuditLog auditLog;
     private ShortUrlService service;
 
     private final User owner = TestFixtures.user(2L, "John Doe", Role.ROLE_USER);
@@ -40,8 +43,9 @@ class ShortUrlServiceTest {
         shortUrlRepository = mock(ShortUrlRepository.class);
         // validateOriginalUrl off, so these tests never touch the network
         var properties = new ApplicationProperties("http://localhost:8080", 30, false, 10);
+        auditLog = mock(AuditLog.class);
         service = new ShortUrlService(shortUrlRepository, new EntityMapper(), properties,
-                mock(UrlExistenceValidator.class), mock(UserRepository.class));
+                mock(UrlExistenceValidator.class), mock(UserRepository.class), auditLog);
     }
 
     @Test
@@ -207,6 +211,60 @@ class ShortUrlServiceTest {
         service.updateShortUrl(1L, new UpdateShortUrlCmd(true, Expiry.KEEP, null));
 
         assertThat(guestUrl.getIsPrivate()).isFalse();
+    }
+
+    // --- audit entries -----------------------------------------------------------------
+
+    @Test
+    void anEditIsAuditedWithWhatChanged() {
+        var shortUrl = givenById(TestFixtures.shortUrl(1L, "mine01", false, owner));
+        shortUrl.setExpiresAt(Instant.parse("2026-10-01T09:30:00Z"));
+
+        service.updateShortUrl(1L, new UpdateShortUrlCmd(true, Expiry.NEVER, null));
+
+        verify(auditLog).record(AuditAction.LINK_EDITED, 1L,
+                "mine01: public → private; expiry 2026-10-01 09:30 UTC → never");
+    }
+
+    @Test
+    void anEditThatChangesNothingSaysSo() {
+        givenById(TestFixtures.shortUrl(1L, "mine01", false, owner));
+
+        service.updateShortUrl(1L, new UpdateShortUrlCmd(false, Expiry.KEEP, null));
+
+        verify(auditLog).record(AuditAction.LINK_EDITED, 1L, "mine01: no changes");
+    }
+
+    @Test
+    void eachDeletedLinkGetsItsOwnEntry() {
+        var a = TestFixtures.shortUrl(1L, "del001", false, owner);
+        var b = TestFixtures.shortUrl(2L, "del002", false, owner);
+        given(shortUrlRepository.findAllByIdIn(List.of(1L, 2L))).willReturn(List.of(a, b));
+
+        service.deleteShortUrls(List.of(1L, 2L));
+
+        verify(auditLog).record(AuditAction.LINK_DELETED, 1L, "del001 → https://example.com/del001");
+        verify(auditLog).record(AuditAction.LINK_DELETED, 2L, "del002 → https://example.com/del002");
+    }
+
+    @Test
+    void disablingAndEnablingAreAudited() {
+        givenById(TestFixtures.shortUrl(1L, "mine01", false, owner));
+
+        service.setDisabled(1L, true);
+        service.setDisabled(1L, false);
+
+        verify(auditLog).record(AuditAction.LINK_DISABLED, 1L, "mine01 → https://example.com/mine01");
+        verify(auditLog).record(AuditAction.LINK_ENABLED, 1L, "mine01 → https://example.com/mine01");
+    }
+
+    @Test
+    void resolvingALinkIsNotAudited() {
+        givenStored(TestFixtures.shortUrl(1L, "pub001", false, owner));
+
+        service.accessOriginalUrl("pub001", null);
+
+        verifyNoInteractions(auditLog);
     }
 
     @Test
