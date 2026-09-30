@@ -6,8 +6,10 @@
 <nav th:fragment="pager(page, url)" th:if="${page.totalPages > 1}" aria-label="Page navigation">
     <ul class="pagination justify-content-center">
         <li class="page-item" th:classappend="${page.isFirst} ? 'disabled'">
+            <!-- only out of the tab order (and marked disabled) on the first page -->
             <a class="page-link" th:href="@{${url}(page=${page.pageNumber - 1})} + '#url-table'"
-               tabindex="-1" aria-label="Previous">&laquo;</a>
+               th:attr="tabindex=${page.isFirst} ? '-1' : null, aria-disabled=${page.isFirst} ? 'true' : null"
+               aria-label="Previous page">&laquo;</a>
         </li>
         <!-- pageLinks() is windowed; a null entry is a gap between page numbers -->
         <th:block th:each="i : ${page.pageLinks()}">
@@ -22,7 +24,8 @@
         </th:block>
         <li class="page-item" th:classappend="${page.isLast} ? 'disabled'">
             <a class="page-link" th:href="@{${url}(page=${page.pageNumber + 1})} + '#url-table'"
-               aria-label="Next">&raquo;</a>
+               th:attr="tabindex=${page.isLast} ? '-1' : null, aria-disabled=${page.isLast} ? 'true' : null"
+               aria-label="Next page">&raquo;</a>
         </li>
     </ul>
 </nav>

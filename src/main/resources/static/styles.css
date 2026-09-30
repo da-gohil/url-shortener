@@ -130,3 +130,29 @@ body > .container {
 .about__cta {
     background: var(--bs-tertiary-bg, #f8f9fa);
 }
+
+/* Bootstrap's .visually-hidden is position:absolute. Inside a scrolling
+   .table-responsive (e.g. a hidden "Actions" header) it would otherwise be
+   placed relative to the page, escape the scroll box and widen the whole page
+   on phones. Making the wrapper the containing block keeps it clipped inside. */
+.table-responsive {
+    position: relative;
+}
+
+/* "Skip to main content": hidden until focused, then shown above the fixed navbar */
+.skip-link:focus {
+    position: fixed;
+    top: .5rem;
+    left: .5rem;
+    z-index: 1100;
+    padding: .5rem 1rem;
+    background: #fff;
+    color: #0d6efd;
+    border-radius: .375rem;
+    box-shadow: 0 .25rem .75rem rgba(0, 0, 0, .25);
+}
+
+/* the skip link moves focus to <main>; no outline box around the whole page */
+main:focus {
+    outline: none;
+}

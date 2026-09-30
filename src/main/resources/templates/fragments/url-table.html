@@ -45,14 +45,15 @@
                     </td>
                     <td>
                         <a th:href="@{/s/{key}(key=${url.shortKey})}"
-                           th:text="${baseUrl + '/s/' + url.shortKey}" target="_blank"></a>
+                           th:text="${baseUrl + '/s/' + url.shortKey}" target="_blank" rel="noopener"></a>
                         <button type="button" class="btn btn-sm btn-outline-secondary ms-1 py-0"
                                 th:attr="data-copy=${baseUrl + '/s/' + url.shortKey}"
                                 th:aria-label="'Copy ' + ${baseUrl + '/s/' + url.shortKey}">Copy</button>
                     </td>
                     <td>
                         <a th:href="${url.originalUrl}"
-                           th:text="${#strings.abbreviate(url.originalUrl, 50)}" target="_blank"></a>
+                           th:text="${#strings.abbreviate(url.originalUrl, 50)}" th:title="${url.originalUrl}"
+                           target="_blank" rel="noopener noreferrer nofollow"></a>
                     </td>
                     <td th:if="${showOwner}"
                         th:text="${url.createdBy != null ? url.createdBy.name : 'Guest'}"></td>
@@ -76,6 +77,7 @@
                         <button th:if="${adminActions}" type="submit" class="btn btn-sm btn-outline-warning py-0"
                                 th:attr="form=${'toggle-row-' + url.id},
                                          data-confirm=${url.disabled ? null : 'Disable ' + url.shortKey + '? It will stop redirecting.'}"
+                                th:aria-label="(${url.disabled} ? 'Enable ' : 'Disable ') + ${url.shortKey}"
                                 th:text="${url.disabled} ? 'Enable' : 'Disable'">Disable</button>
                         <!-- submits its own one-row form below; forms cannot nest -->
                         <button type="submit" class="btn btn-sm btn-outline-danger py-0"

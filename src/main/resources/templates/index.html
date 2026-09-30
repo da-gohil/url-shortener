@@ -7,43 +7,60 @@
 >
 
 <head>
-    <title>URL Shortener Service</title>
+    <title>Shorten a link</title>
 </head>
 
 <body>
 <div layout:fragment="content">
-    <div class="jumbotron bg-light p-5 rounded-3 my-4">
-        <p class="lead">A simple URL shortener service. Create short and easy-to-share links!</p>
+    <div class="bg-light p-4 p-md-5 rounded-3 my-4">
+        <h1 class="h2 mb-2">Shorten a link</h1>
+        <p class="lead mb-0">A simple URL shortener service. Create short and easy-to-share links!</p>
     </div>
 
-    <!-- input Form-->
+    <!-- shown once, right after a link is created -->
+    <div th:if="${createdShortUrl}" class="alert alert-success d-flex flex-wrap align-items-center gap-2"
+         role="status">
+        <span>Your short link is ready:</span>
+        <a class="fw-semibold text-break" th:href="${createdShortUrl}" th:text="${createdShortUrl}"
+           target="_blank" rel="noopener">short link</a>
+        <button type="button" class="btn btn-sm btn-success ms-auto" th:attr="data-copy=${createdShortUrl}"
+                th:aria-label="'Copy ' + ${createdShortUrl}">Copy</button>
+    </div>
+
     <div class="card mt-4">
         <div class="card-header">
-            <h5 class="card-title mb-0">Create a Short URL</h5>
+            <h2 class="h5 card-title mb-0">Create a Short URL</h2>
         </div>
         <div class="card-body">
-            <form th:action="@{/short-urls}" method="post"
-                  th:object="${createShortUrlForm}">
+            <form th:action="@{/short-urls}" method="post" th:object="${createShortUrlForm}" novalidate>
                 <div class="mb-3">
                     <label for="originalUrl" class="form-label">Original URL</label>
-                    <input type="text" class="form-control" id="originalUrl"
-                           th:field="*{originalUrl}"
+                    <input type="text" inputmode="url" autocomplete="url" class="form-control" id="originalUrl"
+                           th:field="*{originalUrl}" th:errorclass="is-invalid" required
+                           aria-describedby="originalUrlHelp"
+                           th:attrappend="aria-describedby=${#fields.hasErrors('originalUrl')} ? ' originalUrlError'"
                            placeholder="https://example.com/my-long-url">
-                    <div class="text-danger"
-                         th:if="${#fields.hasErrors('originalUrl')}"
+                    <div id="originalUrlHelp" class="form-text">You can leave off <code>https://</code>.</div>
+                    <div id="originalUrlError" class="invalid-feedback" th:if="${#fields.hasErrors('originalUrl')}"
                          th:errors="*{originalUrl}"></div>
+                </div>
 
-                    <!-- Conditional fields to show if these two fields-->
-                    <div class="mb-3" sec:authorize="isAuthenticated()">
+                <!-- owner-only options; the server ignores them for guests anyway -->
+                <div class="row g-3 mb-3" sec:authorize="isAuthenticated()">
+                    <div class="col-sm-6">
                         <label for="expirationInDays" class="form-label">Expiration (days)</label>
                         <input type="number" class="form-control" id="expirationInDays"
-                               th:field="*{expirationInDays}"
-                               min="1" max="365">
-                        <div class="form-text">Leave empty to never expire</div>
+                               th:field="*{expirationInDays}" th:errorclass="is-invalid" min="1" max="365"
+                               aria-describedby="expirationHelp">
+                        <div id="expirationHelp" class="form-text">Leave empty to never expire.</div>
+                        <div class="invalid-feedback" th:if="${#fields.hasErrors('expirationInDays')}"
+                             th:errors="*{expirationInDays}"></div>
                     </div>
-                    <div class="mb-3 form-check" sec:authorize="isAuthenticated()">
-                        <input type="checkbox" class="form-check-input" id="isPrivate" th:field="*{isPrivate}">
-                        <label class="form-check-label" for="isPrivate">Private (only you can access)</label>
+                    <div class="col-sm-6 d-flex align-items-sm-center">
+                        <div class="form-check mt-sm-4">
+                            <input type="checkbox" class="form-check-input" id="isPrivate" th:field="*{isPrivate}">
+                            <label class="form-check-label" for="isPrivate">Private (only you can open it)</label>
+                        </div>
                     </div>
                 </div>
 

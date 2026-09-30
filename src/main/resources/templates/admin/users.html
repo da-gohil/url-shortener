@@ -71,6 +71,7 @@
                             <input type="hidden" name="role" th:value="${u.isAdmin()} ? 'ROLE_USER' : 'ROLE_ADMIN'">
                             <button type="submit" class="btn btn-sm btn-outline-primary py-0"
                                     th:attr="data-confirm=${u.isAdmin()} ? ${'Remove admin rights from ' + u.name + '?'} : ${'Make ' + u.name + ' an admin?'}"
+                                    th:aria-label="(${u.isAdmin()} ? 'Remove admin rights from ' : 'Make admin: ') + ${u.name}"
                                     th:text="${u.isAdmin()} ? 'Remove admin' : 'Make admin'">Make admin</button>
                         </form>
                         <form th:action="${u.enabled} ? @{/admin/users/{id}/disable(id=${u.id})} : @{/admin/users/{id}/enable(id=${u.id})}"
@@ -79,6 +80,7 @@
                             <button type="submit" class="btn btn-sm py-0"
                                     th:classappend="${u.enabled} ? 'btn-outline-danger' : 'btn-outline-success'"
                                     th:attr="data-confirm=${u.enabled} ? ${'Disable ' + u.name + '? They will be signed out and unable to sign in.'} : null"
+                                    th:aria-label="(${u.enabled} ? 'Disable ' : 'Enable ') + ${u.name}"
                                     th:text="${u.enabled} ? 'Disable' : 'Enable'">Disable</button>
                         </form>
                     </th:block>

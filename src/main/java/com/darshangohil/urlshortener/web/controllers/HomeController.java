@@ -114,8 +114,8 @@ public class HomeController {
                     userId
             );
             var shortUrlDto = shortUrlService.createShortUrl(cmd);
-            redirectAttributes.addFlashAttribute("successMessage", "URL shortened created successfully! "
-            + baseUrl + "/s/" + shortUrlDto.shortKey());
+            // the home page shows this as a link with a copy button
+            redirectAttributes.addFlashAttribute("createdShortUrl", baseUrl + "/s/" + shortUrlDto.shortKey());
         }catch (InvalidUrlException e){
             // an unreachable URL is bad user input, not a server failure -- report it on the field
             log.info("Rejected unreachable URL {}", form.originalUrl());
