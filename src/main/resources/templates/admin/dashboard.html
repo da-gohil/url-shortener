@@ -111,7 +111,7 @@
                     <ol th:unless="${o.mostClicked.isEmpty()}" class="list-unstyled mb-0">
                         <li th:each="url : ${o.mostClicked}" class="d-flex align-items-baseline py-2 border-bottom">
                             <div class="me-2 text-truncate">
-                                <a th:href="@{/s/{key}(key=${url.shortKey})}" target="_blank"
+                                <a th:href="@{/s/{key}(key=${url.shortKey})}" target="_blank" rel="noopener"
                                    th:text="${url.shortKey}"></a>
                                 <span th:if="${url.disabled}" class="badge bg-danger ms-1">Disabled</span>
                                 <div class="text-muted small text-truncate"

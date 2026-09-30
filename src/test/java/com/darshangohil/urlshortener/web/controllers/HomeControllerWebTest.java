@@ -84,7 +84,7 @@ class HomeControllerWebTest {
                 .willReturn(TestFixtures.onePage(List.of()));
         mockMvc.perform(get("/"))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("<title>URL Shortener Service</title>")))
+                .andExpect(content().string(containsString("<title>Shorten a link · URL Shortener</title>")))
                 // version-less @{/webjars/...} in the template, resolved by webjars-locator-lite
                 .andExpect(content().string(containsString("/webjars/bootstrap/5.3.3/css/bootstrap.min.css")))
                 .andExpect(content().string(containsString("/webjars/bootstrap/5.3.3/js/bootstrap.bundle.min.js")))
@@ -134,7 +134,7 @@ class HomeControllerWebTest {
         mockMvc.perform(get("/"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(org.hamcrest.Matchers.not(containsString("expirationInDays"))))
-                .andExpect(content().string(org.hamcrest.Matchers.not(containsString("Private (only you can access)"))))
+                .andExpect(content().string(org.hamcrest.Matchers.not(containsString("Private (only you can open it)"))))
                 .andExpect(content().string(containsString(">Login</a>")));
     }
 
@@ -145,7 +145,7 @@ class HomeControllerWebTest {
         mockMvc.perform(get("/").with(user(TestFixtures.principal(2L, "John Doe", Role.ROLE_USER))))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("expirationInDays")))
-                .andExpect(content().string(containsString("Private (only you can access)")))
+                .andExpect(content().string(containsString("Private (only you can open it)")))
                 .andExpect(content().string(containsString("Signed in as")))
                 .andExpect(content().string(containsString("My URLs")));
     }
@@ -231,9 +231,14 @@ class HomeControllerWebTest {
     void aboutRendersThroughLayout() throws Exception {
         mockMvc.perform(get("/about"))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("<title>About</title>")))
+                .andExpect(content().string(containsString("<title>About · URL Shortener</title>")))
                 .andExpect(content().string(containsString("navbar-brand")))
-                .andExpect(content().string(containsString("About URL Shortener Service Page")));
+                .andExpect(content().string(containsString("About URL Shortener")))
+                // numbers come from configuration (defaults: 30 days, 10 links an hour)
+                .andExpect(content().string(containsString("expire after 30 days")))
+                .andExpect(content().string(containsString("Up to 10 links an hour")))
+                .andExpect(content().string(containsString("Create an account")))
+                .andExpect(content().string(containsString("rel=\"noopener noreferrer\"")));
     }
 
     @Test
@@ -283,10 +288,10 @@ class HomeControllerWebTest {
         mockMvc.perform(get("/s/nope00"))
                 .andExpect(status().isNotFound())
                 .andExpect(view().name("error/404"))
-                .andExpect(content().string(containsString("<title>Page Not Found</title>")))
+                .andExpect(content().string(containsString("<title>Page Not Found · URL Shortener</title>")))
                 // rendered through the shared layout
                 .andExpect(content().string(containsString("navbar-brand")))
-                .andExpect(content().string(containsString("does not exist or has expired")));
+                .andExpect(content().string(containsString("may have expired")));
     }
 
     @Test
@@ -297,7 +302,7 @@ class HomeControllerWebTest {
                         .with(user(TestFixtures.principal(2L, "John Doe", Role.ROLE_USER))))
                 .andExpect(status().isNotFound())
                 .andExpect(view().name("error/404"))
-                .andExpect(content().string(containsString("<title>Page Not Found</title>")));
+                .andExpect(content().string(containsString("<title>Page Not Found · URL Shortener</title>")));
     }
 
     @Test
@@ -316,7 +321,7 @@ class HomeControllerWebTest {
         mockMvc.perform(get("/"))
                 .andExpect(status().isInternalServerError())
                 .andExpect(view().name("error/500"))
-                .andExpect(content().string(containsString("<title>Something Went Wrong</title>")));
+                .andExpect(content().string(containsString("<title>Something Went Wrong · URL Shortener</title>")));
     }
 
     @Test
@@ -384,8 +389,39 @@ class HomeControllerWebTest {
         mockMvc.perform(post("/short-urls").with(csrf()).param("originalUrl", "https://example.com"))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/"))
-                .andExpect(flash().attribute("successMessage",
-                        containsString("http://localhost:8080/s/abc123")));
+                .andExpect(flash().attribute("createdShortUrl", "http://localhost:8080/s/abc123"));
+    }
+
+    @Test
+    void theNewShortLinkIsShownWithACopyButton() throws Exception {
+        given(shortUrlService.findAllPublicShortUrls(anyInt())).willReturn(TestFixtures.onePage(List.of()));
+
+        mockMvc.perform(get("/").flashAttr("createdShortUrl", "http://localhost:8080/s/abc123"))
+                .andExpect(content().string(containsString("Your short link is ready:")))
+                .andExpect(content().string(containsString("href=\"http://localhost:8080/s/abc123\"")))
+                .andExpect(content().string(containsString("data-copy=\"http://localhost:8080/s/abc123\"")));
+    }
+
+    @Test
+    void everyPageHasOneH1AndASkipLink() throws Exception {
+        given(shortUrlService.findAllPublicShortUrls(anyInt())).willReturn(TestFixtures.onePage(List.of()));
+
+        for (String page : List.of("/", "/about")) {
+            String html = mockMvc.perform(get(page)).andReturn().getResponse().getContentAsString();
+            assertThat(html).as(page).containsOnlyOnce("<h1").contains("href=\"#main\"").contains("<main");
+        }
+    }
+
+    @Test
+    void aFieldErrorIsTiedToItsInput() throws Exception {
+        given(shortUrlService.findAllPublicShortUrls(anyInt())).willReturn(TestFixtures.onePage(List.of()));
+
+        String html = mockMvc.perform(post("/short-urls").with(csrf()).param("originalUrl", ""))
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(html).containsPattern("id=\"originalUrl\"[^>]*class=\"form-control is-invalid\"|class=\"form-control is-invalid\"[^>]*id=\"originalUrl\"")
+                .contains("aria-describedby=\"originalUrlHelp originalUrlError\"")
+                .contains("id=\"originalUrlError\"");
     }
 
     @Test
@@ -435,7 +471,7 @@ class HomeControllerWebTest {
         mockMvc.perform(get("/my-urls")
                         .with(user(TestFixtures.principal(2L, "John Doe", Role.ROLE_USER))))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("<title>My URLs</title>")))
+                .andExpect(content().string(containsString("<title>My URLs · URL Shortener</title>")))
                 .andExpect(content().string(containsString("http://localhost:8080/s/mine01")))
                 .andExpect(content().string(containsString("Private")))
                 .andExpect(content().string(containsString("Delete Selected")));
@@ -588,7 +624,7 @@ class HomeControllerWebTest {
 
         mockMvc.perform(get("/my-urls/9/edit").with(user(TestFixtures.principal(2L, "John Doe", Role.ROLE_USER))))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("<title>Edit Link</title>")))
+                .andExpect(content().string(containsString("<title>Edit Link · URL Shortener</title>")))
                 .andExpect(content().string(containsString("http://localhost:8080/s/mine01")))
                 .andExpect(content().string(containsString("https://example.com/page")))
                 // currently private, so the box starts ticked; expiry defaults to "keep"
@@ -699,7 +735,7 @@ class HomeControllerWebTest {
         mockMvc.perform(get("/my-urls")
                         .with(user(TestFixtures.principal(1L, "Admin User", Role.ROLE_ADMIN))))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("<title>My URLs</title>")));
+                .andExpect(content().string(containsString("<title>My URLs · URL Shortener</title>")));
     }
 
     @Test

@@ -15,14 +15,18 @@
         <div class="col-md-5">
             <div class="card mt-4">
                 <div class="card-header">
-                    <h5 class="card-title mb-0">Sign In</h5>
+                    <h1 class="h5 card-title mb-0">Sign In</h1>
                 </div>
                 <div class="card-body">
                     <div th:if="${param.error}" class="alert alert-danger" role="alert">
                         Invalid email or password.
                     </div>
+                    <!-- the minutes come from the URL, so only a plain number is ever shown -->
                     <div th:if="${param.locked}" class="alert alert-danger" role="alert"
-                         th:text="'Too many failed sign-in attempts. Try again in ' + ${param.locked[0]} + (${param.locked[0]} == '1' ? ' minute.' : ' minutes.')">
+                         th:with="minutes=${param.locked[0]}"
+                         th:text="${minutes.matches('[0-9]{1,3}')}
+                                  ? 'Too many failed sign-in attempts. Try again in ' + ${minutes} + (${minutes} == '1' ? ' minute.' : ' minutes.')
+                                  : 'Too many failed sign-in attempts. Try again later.'">
                         Too many failed sign-in attempts. Try again later.
                     </div>
                     <div th:if="${param.expired}" class="alert alert-warning" role="alert">

@@ -15,36 +15,46 @@
         <div class="col-md-5">
             <div class="card mt-4">
                 <div class="card-header">
-                    <h5 class="card-title mb-0">Create Account</h5>
+                    <h1 class="h5 card-title mb-0">Create Account</h1>
                 </div>
                 <div class="card-body">
-                    <form th:action="@{/register}" method="post" th:object="${registerForm}">
+                    <form th:action="@{/register}" method="post" th:object="${registerForm}" novalidate>
                         <div class="mb-3">
                             <label for="name" class="form-label">Name</label>
-                            <input type="text" class="form-control" id="name" th:field="*{name}">
-                            <div class="text-danger" th:if="${#fields.hasErrors('name')}"
+                            <input type="text" class="form-control" id="name" th:field="*{name}"
+                                   th:errorclass="is-invalid" autocomplete="name" required maxlength="255"
+                                   th:attr="aria-describedby=${#fields.hasErrors('name')} ? 'nameError' : null">
+                            <div id="nameError" class="invalid-feedback" th:if="${#fields.hasErrors('name')}"
                                  th:errors="*{name}"></div>
                         </div>
                         <div class="mb-3">
                             <label for="email" class="form-label">Email</label>
                             <input type="email" class="form-control" id="email" th:field="*{email}"
-                                   autocomplete="username">
-                            <div class="text-danger" th:if="${#fields.hasErrors('email')}"
+                                   th:errorclass="is-invalid" autocomplete="username" required
+                                   th:attr="aria-describedby=${#fields.hasErrors('email')} ? 'emailError' : null">
+                            <div id="emailError" class="invalid-feedback" th:if="${#fields.hasErrors('email')}"
                                  th:errors="*{email}"></div>
                         </div>
                         <div class="mb-3">
                             <label for="password" class="form-label">Password</label>
                             <input type="password" class="form-control" id="password" th:field="*{password}"
-                                   autocomplete="new-password">
-                            <div class="text-danger" th:if="${#fields.hasErrors('password')}"
+                                   th:errorclass="is-invalid" autocomplete="new-password" required minlength="8"
+                                   aria-describedby="passwordHelp"
+                                   th:attrappend="aria-describedby=${#fields.hasErrors('password')} ? ' passwordError'">
+                            <div id="passwordHelp" class="form-text">
+                                At least 8 characters. Avoid common passwords and your name or email.
+                            </div>
+                            <div id="passwordError" class="invalid-feedback" th:if="${#fields.hasErrors('password')}"
                                  th:errors="*{password}"></div>
                         </div>
                         <div class="mb-3">
                             <label for="confirmPassword" class="form-label">Confirm Password</label>
                             <input type="password" class="form-control" id="confirmPassword"
-                                   th:field="*{confirmPassword}" autocomplete="new-password">
-                            <div class="text-danger" th:if="${#fields.hasErrors('confirmPassword')}"
-                                 th:errors="*{confirmPassword}"></div>
+                                   th:field="*{confirmPassword}" th:errorclass="is-invalid"
+                                   autocomplete="new-password" required
+                                   th:attr="aria-describedby=${#fields.hasErrors('confirmPassword')} ? 'confirmPasswordError' : null">
+                            <div id="confirmPasswordError" class="invalid-feedback"
+                                 th:if="${#fields.hasErrors('confirmPassword')}" th:errors="*{confirmPassword}"></div>
                         </div>
                         <button type="submit" class="btn btn-primary">Create Account</button>
                     </form>

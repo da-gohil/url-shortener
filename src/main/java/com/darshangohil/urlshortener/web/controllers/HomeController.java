@@ -1,6 +1,7 @@
 package com.darshangohil.urlshortener.web.controllers;
 
 import com.darshangohil.urlshortener.ApplicationProperties;
+import com.darshangohil.urlshortener.RateLimitProperties;
 import com.darshangohil.urlshortener.domain.exception.InvalidUrlException;
 import com.darshangohil.urlshortener.domain.exception.ShortUrlNotFoundException;
 import com.darshangohil.urlshortener.domain.exception.UnsafeUrlException;
@@ -44,12 +45,17 @@ public class HomeController {
     private final String baseUrl;
     private final SecurityUtils securityUtils;
     private final LinkCreationLimiter linkCreationLimiter;
+    private final int defaultExpiryInDays;
+    private final int anonymousLinksPerHour;
 
     public HomeController(ShortUrlService shortUrlService,
                           ApplicationProperties properties, SecurityUtils securityUtils,
-                          LinkCreationLimiter linkCreationLimiter) {
+                          LinkCreationLimiter linkCreationLimiter,
+                          RateLimitProperties rateLimits) {
         this.shortUrlService = shortUrlService;
         this.baseUrl = properties.baseUrl();
+        this.defaultExpiryInDays = properties.defaultExpiryInDays();
+        this.anonymousLinksPerHour = rateLimits.anonymousLinksPerHour();
         this.securityUtils = securityUtils;
         this.linkCreationLimiter = linkCreationLimiter;
     }
@@ -70,6 +76,9 @@ public class HomeController {
     @GetMapping("/about")
     public String about(Model model) {
         model.addAttribute("activeNav", "about");
+        // from configuration, so the page can't drift from what the app actually does
+        model.addAttribute("defaultExpiryInDays", defaultExpiryInDays);
+        model.addAttribute("anonymousLinksPerHour", anonymousLinksPerHour);
         return "about";
     }
 
@@ -105,8 +114,8 @@ public class HomeController {
                     userId
             );
             var shortUrlDto = shortUrlService.createShortUrl(cmd);
-            redirectAttributes.addFlashAttribute("successMessage", "URL shortened created successfully! "
-            + baseUrl + "/s/" + shortUrlDto.shortKey());
+            // the home page shows this as a link with a copy button
+            redirectAttributes.addFlashAttribute("createdShortUrl", baseUrl + "/s/" + shortUrlDto.shortKey());
         }catch (InvalidUrlException e){
             // an unreachable URL is bad user input, not a server failure -- report it on the field
             log.info("Rejected unreachable URL {}", form.originalUrl());

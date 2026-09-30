@@ -104,7 +104,7 @@ class AdminControllerWebTest {
                 .andReturn().getResponse().getContentAsString();
 
         assertThat(html)
-                .contains("<title>Admin Dashboard</title>")
+                .contains("<title>Admin Dashboard · URL Shortener</title>")
                 .contains(">1,234<")                  // users, comma-grouped
                 .contains(">12,345<")                 // total clicks
                 .contains("Last 14 days · 21 links")
@@ -128,7 +128,7 @@ class AdminControllerWebTest {
 
         mockMvc.perform(get("/admin/links").with(user(ADMIN)))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("<title>Admin · Links</title>")))
+                .andExpect(content().string(containsString("<title>Admin · Links · URL Shortener</title>")))
                 .andExpect(content().string(containsString("John Doe")))
                 .andExpect(content().string(containsString("Delete Selected")))
                 // edit links come back to the admin tab, not the admin's own My URLs
@@ -233,7 +233,7 @@ class AdminControllerWebTest {
                 .andReturn().getResponse().getContentAsString();
 
         assertThat(html)
-                .contains("<title>Admin · Users</title>")
+                .contains("<title>Admin · Users · URL Shortener</title>")
                 .contains(">You</span>")
                 // John: link count goes to his links, and he can be promoted or re-enabled
                 .contains("href=\"/admin/links?owner=2\"")
@@ -292,7 +292,7 @@ class AdminControllerWebTest {
 
         mockMvc.perform(get("/admin/audit").with(user(ADMIN)))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("<title>Admin · Audit log</title>")))
+                .andExpect(content().string(containsString("<title>Admin · Audit log · URL Shortener</title>")))
                 .andExpect(content().string(containsString("Disabled account")))
                 .andExpect(content().string(containsString("John Doe &lt;john.doe@example.com&gt;")))
                 .andExpect(content().string(containsString("href=\"/admin/links?owner=2\"")))

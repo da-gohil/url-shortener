@@ -42,7 +42,7 @@ class AuthControllerWebTest {
     void loginPageIsPublic() throws Exception {
         mockMvc.perform(get("/login"))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("<title>Sign In</title>")))
+                .andExpect(content().string(containsString("<title>Sign In · URL Shortener</title>")))
                 .andExpect(content().string(containsString("name=\"_csrf\"")));
     }
 
@@ -57,7 +57,7 @@ class AuthControllerWebTest {
     void registerPageIsPublic() throws Exception {
         mockMvc.perform(get("/register"))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("<title>Create Account</title>")))
+                .andExpect(content().string(containsString("<title>Create Account · URL Shortener</title>")))
                 .andExpect(content().string(containsString("confirmPassword")));
     }
 
@@ -167,6 +167,13 @@ class AuthControllerWebTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("That password is too common.")));
         verify(userService, never()).registerUser(any());
+    }
+
+    @Test
+    void aTamperedLockedParameterShowsTheGenericMessage() throws Exception {
+        mockMvc.perform(get("/login").param("locked", "never. Call 555-0100 to unlock"))
+                .andExpect(content().string(containsString("Try again later.")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(containsString("555-0100"))));
     }
 
     @Test

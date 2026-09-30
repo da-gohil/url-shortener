@@ -66,10 +66,10 @@
                         <label class="form-check-label" for="expiryDays">Expire in</label>
                         <input type="number" class="form-control form-control-sm d-inline-block ms-1"
                                style="width: 6rem" min="1" max="365" aria-label="Days until expiry"
-                               th:field="*{expirationInDays}"
-                               th:classappend="${#fields.hasErrors('expirationInDays')} ? 'is-invalid'">
+                               th:field="*{expirationInDays}" th:errorclass="is-invalid"
+                               th:attr="aria-describedby=${#fields.hasErrors('expirationInDays')} ? 'expirationError' : null">
                         <span class="ms-1">days from now</span>
-                        <div class="text-danger small" th:if="${#fields.hasErrors('expirationInDays')}"
+                        <div id="expirationError" class="text-danger small" th:if="${#fields.hasErrors('expirationInDays')}"
                              th:errors="*{expirationInDays}"></div>
                     </div>
                 </fieldset>
