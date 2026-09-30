@@ -21,3 +21,8 @@ body > .container {
     display: flex;
     flex-direction: column;
 }
+
+/* keep anchor targets (e.g. #url-table from pagination links) clear of the fixed-top navbar */
+#url-table {
+    scroll-margin-top: 70px;
+}

@@ -134,7 +134,9 @@ class HomeControllerWebTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("pagination")))
                 .andExpect(content().string(containsString("?page=2")))
-                .andExpect(content().string(containsString("?page=3")));
+                .andExpect(content().string(containsString("?page=3")))
+                // pager links jump back down to the table, not the top of the page
+                .andExpect(content().string(containsString("?page=2#url-table")));
     }
 
     @Test

@@ -6,7 +6,7 @@
 <nav th:fragment="pager(page, url)" th:if="${page.totalPages > 1}" aria-label="Page navigation">
     <ul class="pagination justify-content-center">
         <li class="page-item" th:classappend="${page.isFirst} ? 'disabled'">
-            <a class="page-link" th:href="@{${url}(page=${page.pageNumber - 1})}"
+            <a class="page-link" th:href="@{${url}(page=${page.pageNumber - 1})} + '#url-table'"
                tabindex="-1" aria-label="Previous">&laquo;</a>
         </li>
         <!-- pageLinks() is windowed; a null entry is a gap between page numbers -->
@@ -16,12 +16,12 @@
             </li>
             <li th:unless="${i == null}" class="page-item"
                 th:classappend="${i == page.pageNumber} ? 'active'">
-                <a class="page-link" th:href="@{${url}(page=${i})}" th:text="${i}"
+                <a class="page-link" th:href="@{${url}(page=${i})} + '#url-table'" th:text="${i}"
                    th:attr="aria-current=${i == page.pageNumber} ? 'page' : null"></a>
             </li>
         </th:block>
         <li class="page-item" th:classappend="${page.isLast} ? 'disabled'">
-            <a class="page-link" th:href="@{${url}(page=${page.pageNumber + 1})}"
+            <a class="page-link" th:href="@{${url}(page=${page.pageNumber + 1})} + '#url-table'"
                aria-label="Next">&raquo;</a>
         </li>
     </ul>
