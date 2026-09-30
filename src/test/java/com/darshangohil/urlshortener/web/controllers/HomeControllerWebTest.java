@@ -60,7 +60,7 @@ class HomeControllerWebTest {
     @BeforeEach
     void stubStats() {
         // every My URLs render needs these; individual tests override when they care
-        given(shortUrlService.getUserStats(any())).willReturn(new UserUrlStats(0L, 0L, 0L));
+        given(shortUrlService.getUserStats(any())).willReturn(new UserUrlStats(0L, 0L, 0L, 0L));
     }
 
     @Test
@@ -382,7 +382,7 @@ class HomeControllerWebTest {
     @Test
     void myUrlsShowsTheUsersStats() throws Exception {
         given(shortUrlService.findUrlsByUser(eq(2L), any(), anyInt())).willReturn(TestFixtures.onePage(List.of()));
-        given(shortUrlService.getUserStats(2L)).willReturn(new UserUrlStats(12L, 345L, 9L));
+        given(shortUrlService.getUserStats(2L)).willReturn(new UserUrlStats(12L, 345L, 9L, 0L));
 
         mockMvc.perform(get("/my-urls")
                         .with(user(TestFixtures.principal(2L, "John Doe", Role.ROLE_USER))))
@@ -609,6 +609,23 @@ class HomeControllerWebTest {
         mockMvc.perform(get("/my-urls/9/edit"))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/login"));
+    }
+
+    @Test
+    void ownersAreToldWhenAnAdminDisabledTheirLinks() throws Exception {
+        var disabled = new ShortUrlDto(9L, "mine01", "https://example.com", false, null,
+                new UserDto(2L, "John Doe"), 0L, Instant.now(), true);
+        given(shortUrlService.findUrlsByUser(eq(2L), any(), anyInt())).willReturn(TestFixtures.onePage(List.of(disabled)));
+        given(shortUrlService.getUserStats(2L)).willReturn(new UserUrlStats(1L, 0L, 0L, 1L));
+
+        String html = mockMvc.perform(get("/my-urls")
+                        .with(user(TestFixtures.principal(2L, "John Doe", Role.ROLE_USER))))
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(html).contains("1 of your links was disabled by an admin")
+                .contains(">Disabled</span>")
+                // owners cannot re-enable: the toggle is admin-only
+                .doesNotContain("toggle-row-");
     }
 
     @Test

@@ -139,9 +139,9 @@ public class ShortUrlService {
     /**
      * Resolves a short key to its original URL, counting the visit.
      *
-     * <p>Returns empty if the key is unknown, the link has expired, or the link is
-     * private and {@code userId} is not its owner. Those three cases deliberately look
-     * alike to the caller, so a private key cannot be confirmed by probing for it.
+     * <p>Returns empty if the key is unknown, the link has expired or been disabled, or
+     * the link is private and {@code userId} is not its owner. These cases deliberately
+     * look alike to the caller, so a private key cannot be confirmed by probing for it.
      *
      * @param userId the viewer, or {@code null} for an anonymous visitor
      */
@@ -150,6 +150,7 @@ public class ShortUrlService {
         return shortUrlRepository.findByShortKey(shortKey)
                 .filter(shortUrl -> shortUrl.getExpiresAt() == null
                         || shortUrl.getExpiresAt().isAfter(Instant.now()))
+                .filter(shortUrl -> !Boolean.TRUE.equals(shortUrl.getDisabled()))
                 .filter(shortUrl -> isVisibleTo(shortUrl, userId))
                 .map(shortUrl -> {
                     shortUrlRepository.incrementClickCount(shortUrl.getId());
@@ -195,6 +196,19 @@ public class ShortUrlService {
             case DAYS -> shortUrl.setExpiresAt(Instant.now().plus(
                     Objects.requireNonNull(cmd.expirationInDays(), "expirationInDays"), ChronoUnit.DAYS));
         }
+        return entityMapper.toShortUrlDto(shortUrl);
+    }
+
+    /**
+     * Disables or re-enables a link. A disabled link stops redirecting (visitors get
+     * the same 404 as an unknown key) but keeps its row, clicks and short key. Owners
+     * cannot undo this; only an admin can.
+     */
+    @PreAuthorize("hasRole('ADMIN')")
+    @Transactional
+    public ShortUrlDto setDisabled(Long id, boolean disabled) {
+        ShortUrl shortUrl = findOrThrow(id);
+        shortUrl.setDisabled(disabled);
         return entityMapper.toShortUrlDto(shortUrl);
     }
 

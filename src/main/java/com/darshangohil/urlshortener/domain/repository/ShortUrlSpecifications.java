@@ -44,11 +44,14 @@ public final class ShortUrlSpecifications {
             case ALL -> { }
         }
         switch (filter.status()) {
-            case ACTIVE -> parts.add((root, query, cb) -> cb.or(
-                    cb.isNull(root.get("expiresAt")),
-                    cb.greaterThan(root.get("expiresAt"), now)));
-            case EXPIRED -> parts.add((root, query, cb) ->
-                    cb.lessThanOrEqualTo(root.get("expiresAt"), now));
+            case ACTIVE -> parts.add((root, query, cb) -> cb.and(
+                    cb.isFalse(root.get("disabled")),
+                    cb.or(cb.isNull(root.get("expiresAt")),
+                          cb.greaterThan(root.get("expiresAt"), now))));
+            case EXPIRED -> parts.add((root, query, cb) -> cb.and(
+                    cb.isFalse(root.get("disabled")),
+                    cb.lessThanOrEqualTo(root.get("expiresAt"), now)));
+            case DISABLED -> parts.add((root, query, cb) -> cb.isTrue(root.get("disabled")));
             case ALL -> { }
         }
         return Specification.allOf(parts);

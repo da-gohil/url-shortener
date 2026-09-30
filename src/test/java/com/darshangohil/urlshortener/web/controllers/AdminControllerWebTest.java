@@ -6,6 +6,7 @@ import com.darshangohil.urlshortener.config.SecurityConfig;
 import com.darshangohil.urlshortener.domain.models.OwnerFilter;
 import com.darshangohil.urlshortener.domain.models.PagedResult;
 import com.darshangohil.urlshortener.domain.models.Role;
+import com.darshangohil.urlshortener.domain.models.ShortUrlDto;
 import com.darshangohil.urlshortener.domain.models.ShortUrlFilter;
 import com.darshangohil.urlshortener.domain.models.UserDto;
 import com.darshangohil.urlshortener.domain.services.ShortUrlService;
@@ -25,6 +26,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.List;
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -35,6 +37,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.flash;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -123,6 +126,50 @@ class AdminControllerWebTest {
 
         mockMvc.perform(get("/admin/links").with(user(ADMIN)).param("owner", "guest").param("page", "9"))
                 .andExpect(redirectedUrl("/admin/links?owner=guest&page=3"));
+    }
+
+    @Test
+    void rowsOfferDisableAndReturnToTheSameListing() throws Exception {
+        given(shortUrlService.findAllShortUrls(any(), any(), anyInt())).willReturn(TestFixtures.onePage(List.of(
+                TestFixtures.dto(4L, "p0L8kJ", false, new UserDto(2L, "John Doe")),
+                new ShortUrlDto(5L, "off001", "https://example.com", false, null, null, 0L,
+                        java.time.Instant.now(), true))));
+
+        String html = mockMvc.perform(get("/admin/links").with(user(ADMIN)).param("status", "all").param("sort", "clicks"))
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(html)
+                .contains("action=\"/admin/links/4/disable\"")
+                .contains("action=\"/admin/links/5/enable\"")
+                .contains("name=\"returnTo\" value=\"/admin/links?sort=clicks&amp;page=1\"")
+                .contains(">Disabled</span>");
+    }
+
+    @Test
+    void disablingRedirectsBackWithTheListingIntact() throws Exception {
+        given(shortUrlService.setDisabled(4L, true)).willReturn(TestFixtures.dto(4L, "p0L8kJ", false, null));
+
+        mockMvc.perform(post("/admin/links/4/disable").with(csrf()).with(user(ADMIN))
+                        .param("returnTo", "/admin/links?owner=2&page=3"))
+                .andExpect(redirectedUrl("/admin/links?owner=2&page=3"))
+                .andExpect(flash().attribute("successMessage", "Disabled p0L8kJ: it no longer redirects"));
+        verify(shortUrlService).setDisabled(4L, true);
+    }
+
+    @Test
+    void anOffSiteReturnToIsIgnored() throws Exception {
+        given(shortUrlService.setDisabled(4L, false)).willReturn(TestFixtures.dto(4L, "p0L8kJ", false, null));
+
+        for (String evil : List.of("https://evil.example", "//evil.example", "/admin/linksevil", "/my-urls")) {
+            mockMvc.perform(post("/admin/links/4/enable").with(csrf()).with(user(ADMIN)).param("returnTo", evil))
+                    .andExpect(redirectedUrl("/admin/links"));
+        }
+    }
+
+    @Test
+    void ordinaryUserCannotDisableALink() throws Exception {
+        mockMvc.perform(post("/admin/links/4/disable").with(csrf()).with(user(JOHN)))
+                .andExpect(status().isForbidden());
     }
 
     @Test

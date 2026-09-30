@@ -6,9 +6,13 @@ package com.darshangohil.urlshortener.domain.models;
  * <p>Boxed {@code Long}s because the repository builds this with a JPQL constructor
  * expression, and {@code COUNT}/{@code SUM} come back as {@code Long}.
  */
-public record UserUrlStats(Long totalLinks, Long totalClicks, Long activeLinks) {
+public record UserUrlStats(Long totalLinks, Long totalClicks, Long activeLinks, Long disabledLinks) {
 
+    /**
+     * Expired but not disabled. A link is exactly one of active, expired or disabled
+     * (disabled wins), so the three always add up to {@link #totalLinks}.
+     */
     public long expiredLinks() {
-        return totalLinks - activeLinks;
+        return totalLinks - activeLinks - disabledLinks;
     }
 }

@@ -35,6 +35,10 @@ public class ShortUrl {
     @Column(name = "click_count", nullable = false)
     private Long clickCount;
 
+    @ColumnDefault("false")
+    @Column(name = "disabled", nullable = false)
+    private Boolean disabled = false;
+
     @ColumnDefault("CURRENT_TIMESTAMP")
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
@@ -85,6 +89,14 @@ public class ShortUrl {
 
     public void setCreatedBy(User createdBy) {
         this.createdBy = createdBy;
+    }
+
+    public Boolean getDisabled() {
+        return disabled;
+    }
+
+    public void setDisabled(Boolean disabled) {
+        this.disabled = disabled;
     }
 
     public Long getClickCount() {

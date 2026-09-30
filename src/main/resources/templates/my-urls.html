@@ -42,6 +42,9 @@
 
     <div th:replace="~{fragments/url-filters :: filterForm('/my-urls', ${filter})}"></div>
 
+    <p th:if="${stats.disabledLinks > 0}" class="text-danger small"
+       th:text="${stats.disabledLinks} + ' of your links ' + (${stats.disabledLinks} == 1 ? 'was' : 'were') + ' disabled by an admin and no longer redirect.'"></p>
+
     <p th:if="${filter.isFiltering()}" class="text-muted small"
        th:text="${shortUrls.totalElements} + ' of ' + ${stats.totalLinks} + ' links match'"></p>
 

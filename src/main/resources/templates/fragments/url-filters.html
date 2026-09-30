@@ -32,6 +32,7 @@
                 <option value="all">All</option>
                 <option value="active" th:selected="${filter.status.name() == 'ACTIVE'}">Active</option>
                 <option value="expired" th:selected="${filter.status.name() == 'EXPIRED'}">Expired</option>
+                <option value="disabled" th:selected="${filter.status.name() == 'DISABLED'}">Disabled</option>
             </select>
         </div>
         <div class="col-6 col-md-2">

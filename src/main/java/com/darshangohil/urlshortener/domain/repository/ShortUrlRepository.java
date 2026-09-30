@@ -21,11 +21,12 @@ public interface ShortUrlRepository extends JpaRepository<ShortUrl, Long>,
 
     // @EntityGraph rather than "join fetch": a fetch join with a Pageable forces
     // Hibernate to paginate in memory (HHH000104), which defeats the point.
-    /** Public links that have not expired as of {@code now}: the home page listing. */
+    /** Public, enabled links that have not expired as of {@code now}: the home page listing. */
     @EntityGraph(attributePaths = "createdBy")
     @Query("""
             SELECT su FROM ShortUrl su
             WHERE su.isPrivate = false
+              AND su.disabled = false
               AND (su.expiresAt IS NULL OR su.expiresAt > :now)
             """)
     Page<ShortUrl> findActivePublicShortUrls(Instant now, Pageable pageable);
@@ -56,8 +57,10 @@ public interface ShortUrlRepository extends JpaRepository<ShortUrl, Long>,
             SELECT new com.darshangohil.urlshortener.domain.models.UserUrlStats(
                 COUNT(su),
                 COALESCE(SUM(su.clickCount), 0L),
-                COALESCE(SUM(CASE WHEN su.expiresAt IS NULL OR su.expiresAt > :now
-                                  THEN 1L ELSE 0L END), 0L))
+                COALESCE(SUM(CASE WHEN su.disabled = false
+                                   AND (su.expiresAt IS NULL OR su.expiresAt > :now)
+                                  THEN 1L ELSE 0L END), 0L),
+                COALESCE(SUM(CASE WHEN su.disabled = true THEN 1L ELSE 0L END), 0L))
             FROM ShortUrl su
             WHERE su.createdBy.id = :userId
             """)

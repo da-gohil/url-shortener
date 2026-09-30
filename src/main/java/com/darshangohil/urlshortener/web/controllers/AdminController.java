@@ -11,6 +11,7 @@ import com.darshangohil.urlshortener.web.utils.FilterLinks;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -72,11 +73,45 @@ public class AdminController {
         }
         // the edit page sends an admin back here rather than to their own My URLs
         model.addAttribute("editFrom", "admin");
+        model.addAttribute("adminActions", true);
+        model.addAttribute("returnTo", linksLink(filter, ownerFilter, page));
         model.addAttribute("activeNav", "admin");
         model.addAttribute("adminTab", "links");
         model.addAttribute("baseUrl", baseUrl);
         model.addAttribute("paginationUrl", linksLink(filter, ownerFilter, null));
         return "admin/links";
+    }
+
+    @PostMapping("/links/{id}/disable")
+    public String disable(@PathVariable Long id,
+                          @RequestParam(required = false) String returnTo,
+                          RedirectAttributes redirectAttributes) {
+        ShortUrlDto link = shortUrlService.setDisabled(id, true);
+        redirectAttributes.addFlashAttribute("successMessage",
+                "Disabled " + link.shortKey() + ": it no longer redirects");
+        return "redirect:" + safeReturn(returnTo);
+    }
+
+    @PostMapping("/links/{id}/enable")
+    public String enable(@PathVariable Long id,
+                         @RequestParam(required = false) String returnTo,
+                         RedirectAttributes redirectAttributes) {
+        ShortUrlDto link = shortUrlService.setDisabled(id, false);
+        redirectAttributes.addFlashAttribute("successMessage", "Re-enabled " + link.shortKey());
+        return "redirect:" + safeReturn(returnTo);
+    }
+
+    /**
+     * Back to the listing the admin was on, filters and page included. Only a path
+     * under /admin/links is accepted, so the parameter cannot redirect off-site.
+     */
+    private static String safeReturn(String returnTo) {
+        if (returnTo != null && returnTo.startsWith("/admin/links")
+                && (returnTo.length() == "/admin/links".length()
+                    || returnTo.charAt("/admin/links".length()) == '?')) {
+            return returnTo;
+        }
+        return "/admin/links";
     }
 
     @PostMapping("/delete-urls")

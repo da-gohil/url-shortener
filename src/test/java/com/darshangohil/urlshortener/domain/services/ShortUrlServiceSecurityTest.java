@@ -186,6 +186,19 @@ class ShortUrlServiceSecurityTest {
         assertThatNoException().isThrownBy(() -> service.updateShortUrl(1L, KEEP_ALL));
     }
 
+    // --- disabling -------------------------------------------------------------------
+
+    @Test
+    void onlyAnAdminCanDisableALink() {
+        givenLink(TestFixtures.shortUrl(1L, "mine01", false, owner));
+
+        signInAs(owner);
+        assertThatThrownBy(() -> service.setDisabled(1L, false)).isInstanceOf(AccessDeniedException.class);
+
+        signInAs(admin);
+        assertThatNoException().isThrownBy(() -> service.setDisabled(1L, true));
+    }
+
     // --- deleting -------------------------------------------------------------------
 
     @Test

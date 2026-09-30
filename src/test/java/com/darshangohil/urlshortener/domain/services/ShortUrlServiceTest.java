@@ -105,6 +105,25 @@ class ShortUrlServiceTest {
     }
 
     @Test
+    void aDisabledUrlDoesNotResolveEvenForItsOwner() {
+        var shortUrl = TestFixtures.shortUrl(1L, "dis001", false, owner);
+        shortUrl.setDisabled(true);
+        givenStored(shortUrl);
+
+        assertThat(service.accessOriginalUrl("dis001", owner.getId())).isEmpty();
+        verify(shortUrlRepository, never()).incrementClickCount(any());
+    }
+
+    @Test
+    void setDisabledFlagsTheLink() {
+        var shortUrl = givenById(TestFixtures.shortUrl(1L, "mine01", false, owner));
+
+        assertThat(service.setDisabled(1L, true).disabled()).isTrue();
+        assertThat(shortUrl.getDisabled()).isTrue();
+        assertThat(service.setDisabled(1L, false).disabled()).isFalse();
+    }
+
+    @Test
     void expiredUrlDoesNotResolve() {
         var shortUrl = TestFixtures.shortUrl(1L, "old001", false, owner);
         shortUrl.setExpiresAt(Instant.now().minus(1, ChronoUnit.DAYS));
