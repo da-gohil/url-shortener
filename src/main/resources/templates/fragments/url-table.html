@@ -7,7 +7,9 @@
   and the whole table is wrapped in a form posting to `deleteUrl`.
 -->
 <div th:fragment="urlTable(page, baseUrl, deletable, deleteUrl, showOwner)" id="url-table">
-    <div th:if="${page.data.isEmpty()}" class="alert alert-info">
+    <!-- a page may set `emptyMessage`, e.g. when filters hide everything -->
+    <div th:if="${page.data.isEmpty()}" class="alert alert-info"
+         th:text="${emptyMessage} ?: 'No URLs to show yet.'">
         No URLs to show yet.
     </div>
 

@@ -8,6 +8,7 @@ import com.darshangohil.urlshortener.domain.models.CreateShortUrlCmd;
 import com.darshangohil.urlshortener.domain.models.PagedResult;
 import com.darshangohil.urlshortener.domain.models.Role;
 import com.darshangohil.urlshortener.domain.models.ShortUrlDto;
+import com.darshangohil.urlshortener.domain.models.ShortUrlFilter;
 import com.darshangohil.urlshortener.domain.models.UserDto;
 import com.darshangohil.urlshortener.domain.models.UserUrlStats;
 import com.darshangohil.urlshortener.domain.services.ShortUrlService;
@@ -363,7 +364,7 @@ class HomeControllerWebTest {
 
     @Test
     void myUrlsListsOnlyTheSignedInUsersLinks() throws Exception {
-        given(shortUrlService.findUrlsByUser(eq(2L), anyInt())).willReturn(TestFixtures.onePage(List.of(
+        given(shortUrlService.findUrlsByUser(eq(2L), any(), anyInt())).willReturn(TestFixtures.onePage(List.of(
                 TestFixtures.dto(9L, "mine01", true, new UserDto(2L, "John Doe")))));
 
         mockMvc.perform(get("/my-urls")
@@ -373,12 +374,12 @@ class HomeControllerWebTest {
                 .andExpect(content().string(containsString("http://localhost:8080/s/mine01")))
                 .andExpect(content().string(containsString("Private")))
                 .andExpect(content().string(containsString("Delete Selected")));
-        verify(shortUrlService).findUrlsByUser(2L, 1);
+        verify(shortUrlService).findUrlsByUser(2L, ShortUrlFilter.NONE, 1);
     }
 
     @Test
     void myUrlsShowsTheUsersStats() throws Exception {
-        given(shortUrlService.findUrlsByUser(eq(2L), anyInt())).willReturn(TestFixtures.onePage(List.of()));
+        given(shortUrlService.findUrlsByUser(eq(2L), any(), anyInt())).willReturn(TestFixtures.onePage(List.of()));
         given(shortUrlService.getUserStats(2L)).willReturn(new UserUrlStats(12L, 345L, 9L));
 
         mockMvc.perform(get("/my-urls")
@@ -393,9 +394,65 @@ class HomeControllerWebTest {
     }
 
     @Test
+    void myUrlsPassesTheFilterToTheService() throws Exception {
+        given(shortUrlService.findUrlsByUser(eq(2L), any(), anyInt())).willReturn(TestFixtures.onePage(List.of()));
+
+        mockMvc.perform(get("/my-urls")
+                        .param("q", " docs ").param("visibility", "private")
+                        .param("status", "EXPIRED").param("sort", "clicks")
+                        .with(user(TestFixtures.principal(2L, "John Doe", Role.ROLE_USER))))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("value=\"docs\"")))
+                .andExpect(content().string(containsString("No links match these filters.")))
+                .andExpect(content().string(containsString(">Clear</a>")));
+
+        verify(shortUrlService).findUrlsByUser(2L, new ShortUrlFilter("docs",
+                ShortUrlFilter.Visibility.PRIVATE, ShortUrlFilter.Status.EXPIRED,
+                ShortUrlFilter.SortOrder.CLICKS), 1);
+    }
+
+    @Test
+    void unknownFilterValuesFallBackToTheDefaults() throws Exception {
+        given(shortUrlService.findUrlsByUser(eq(2L), any(), anyInt())).willReturn(TestFixtures.onePage(List.of()));
+
+        mockMvc.perform(get("/my-urls").param("visibility", "sideways").param("sort", "random")
+                        .with(user(TestFixtures.principal(2L, "John Doe", Role.ROLE_USER))))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("No URLs to show yet.")));
+
+        verify(shortUrlService).findUrlsByUser(2L, ShortUrlFilter.NONE, 1);
+    }
+
+    @Test
+    void pagerLinksKeepTheFilters() throws Exception {
+        given(shortUrlService.findUrlsByUser(eq(2L), any(), anyInt())).willReturn(TestFixtures.pageOneOf(List.of(
+                TestFixtures.dto(9L, "mine01", false, new UserDto(2L, "John Doe"))), 3));
+
+        mockMvc.perform(get("/my-urls").param("q", "a&b").param("status", "active")
+                        .with(user(TestFixtures.principal(2L, "John Doe", Role.ROLE_USER))))
+                .andExpect(status().isOk())
+                // the search text is URL-encoded, and page= is appended with &
+                .andExpect(content().string(containsString(
+                        "/my-urls?q=a%26b&amp;status=active&amp;page=2#url-table")));
+    }
+
+    @Test
+    void outOfRangePagesRedirectWithTheFiltersKept() throws Exception {
+        given(shortUrlService.findUrlsByUser(eq(2L), any(), anyInt()))
+                .willReturn(new PagedResult<>(List.of(), 25, 9, 3, false, true, false, true));
+
+        mockMvc.perform(get("/my-urls").param("page", "9").param("sort", "oldest")
+                        .with(user(TestFixtures.principal(2L, "John Doe", Role.ROLE_USER))))
+                .andExpect(redirectedUrl("/my-urls?sort=oldest&page=3"));
+        mockMvc.perform(get("/my-urls").param("page", "0").param("sort", "oldest")
+                        .with(user(TestFixtures.principal(2L, "John Doe", Role.ROLE_USER))))
+                .andExpect(redirectedUrl("/my-urls?sort=oldest"));
+    }
+
+    @Test
     void anAdminCanUseMyUrlsThroughTheRoleHierarchy() throws Exception {
         // /my-urls requires ROLE_USER; an admin only has ROLE_ADMIN, which implies it
-        given(shortUrlService.findUrlsByUser(eq(1L), anyInt())).willReturn(TestFixtures.onePage(List.of()));
+        given(shortUrlService.findUrlsByUser(eq(1L), any(), anyInt())).willReturn(TestFixtures.onePage(List.of()));
 
         mockMvc.perform(get("/my-urls")
                         .with(user(TestFixtures.principal(1L, "Admin User", Role.ROLE_ADMIN))))

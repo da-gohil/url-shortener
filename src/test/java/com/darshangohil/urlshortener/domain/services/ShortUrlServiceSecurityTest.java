@@ -2,8 +2,10 @@ package com.darshangohil.urlshortener.domain.services;
 
 import com.darshangohil.urlshortener.ApplicationProperties;
 import com.darshangohil.urlshortener.config.MethodSecurityConfig;
+import com.darshangohil.urlshortener.domain.entities.ShortUrl;
 import com.darshangohil.urlshortener.domain.entities.User;
 import com.darshangohil.urlshortener.domain.models.Role;
+import com.darshangohil.urlshortener.domain.models.ShortUrlFilter;
 import com.darshangohil.urlshortener.domain.repository.ShortUrlRepository;
 import com.darshangohil.urlshortener.domain.repository.UserRepository;
 import com.darshangohil.urlshortener.support.TestFixtures;
@@ -15,6 +17,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.hierarchicalroles.RoleHierarchy;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -30,7 +33,6 @@ import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -109,25 +111,25 @@ class ShortUrlServiceSecurityTest {
     @Test
     void aUserCanListTheirOwnUrls() {
         signInAs(owner);
-        given(shortUrlRepository.findByCreatedById(eq(2L), any(Pageable.class))).willReturn(Page.empty());
+        given(shortUrlRepository.findAll(anySpec(), any(Pageable.class))).willReturn(Page.empty());
 
-        assertThatNoException().isThrownBy(() -> service.findUrlsByUser(owner.getId(), 1));
+        assertThatNoException().isThrownBy(() -> service.findUrlsByUser(owner.getId(), ShortUrlFilter.NONE, 1));
     }
 
     @Test
     void aUserCannotListSomeoneElsesUrls() {
         signInAs(owner);
 
-        assertThatThrownBy(() -> service.findUrlsByUser(stranger.getId(), 1))
+        assertThatThrownBy(() -> service.findUrlsByUser(stranger.getId(), ShortUrlFilter.NONE, 1))
                 .isInstanceOf(AccessDeniedException.class);
     }
 
     @Test
     void anAdminCanListAnyUsersUrls() {
         signInAs(admin);
-        given(shortUrlRepository.findByCreatedById(eq(3L), any(Pageable.class))).willReturn(Page.empty());
+        given(shortUrlRepository.findAll(anySpec(), any(Pageable.class))).willReturn(Page.empty());
 
-        assertThatNoException().isThrownBy(() -> service.findUrlsByUser(stranger.getId(), 1));
+        assertThatNoException().isThrownBy(() -> service.findUrlsByUser(stranger.getId(), ShortUrlFilter.NONE, 1));
     }
 
     // --- stats ----------------------------------------------------------------------
@@ -210,6 +212,11 @@ class ShortUrlServiceSecurityTest {
         service.deleteShortUrls(List.of(1L, 2L));
 
         verify(shortUrlRepository).deleteAll(List.of(theirs, guest));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Specification<ShortUrl> anySpec() {
+        return any(Specification.class);
     }
 
     private void signInAs(User user) {

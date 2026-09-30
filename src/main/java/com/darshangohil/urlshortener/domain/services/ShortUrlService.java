@@ -6,8 +6,10 @@ import com.darshangohil.urlshortener.domain.exception.InvalidUrlException;
 import com.darshangohil.urlshortener.domain.models.CreateShortUrlCmd;
 import com.darshangohil.urlshortener.domain.models.PagedResult;
 import com.darshangohil.urlshortener.domain.models.ShortUrlDto;
+import com.darshangohil.urlshortener.domain.models.ShortUrlFilter;
 import com.darshangohil.urlshortener.domain.models.UserUrlStats;
 import com.darshangohil.urlshortener.domain.repository.ShortUrlRepository;
+import com.darshangohil.urlshortener.domain.repository.ShortUrlSpecifications;
 import com.darshangohil.urlshortener.domain.repository.UserRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -58,8 +60,10 @@ public class ShortUrlService {
 
     /** A user may list their own URLs; an admin may list anyone's. */
     @PreAuthorize("hasRole('ADMIN') or (hasRole('USER') and #userId == principal.id)")
-    public PagedResult<ShortUrlDto> findUrlsByUser(Long userId, int pageNo) {
-        Page<ShortUrl> page = shortUrlRepository.findByCreatedById(userId, pageRequest(pageNo));
+    public PagedResult<ShortUrlDto> findUrlsByUser(Long userId, ShortUrlFilter filter, int pageNo) {
+        var spec = ShortUrlSpecifications.ownedBy(userId)
+                .and(ShortUrlSpecifications.matching(filter, Instant.now()));
+        Page<ShortUrl> page = shortUrlRepository.findAll(spec, pageRequest(pageNo, filter.sort().toSort()));
         return PagedResult.from(page, entityMapper::toShortUrlDto);
     }
 
@@ -76,8 +80,12 @@ public class ShortUrlService {
 
     /** Callers pass a 1-based page number, matching the {@code ?page=} request parameter. */
     private Pageable pageRequest(int pageNo) {
+        return pageRequest(pageNo, NEWEST_FIRST);
+    }
+
+    private Pageable pageRequest(int pageNo, Sort sort) {
         int pageIndex = Math.max(pageNo, 1) - 1;
-        return PageRequest.of(pageIndex, properties.pageSize(), NEWEST_FIRST);
+        return PageRequest.of(pageIndex, properties.pageSize(), sort);
     }
 
     private String generateUniqueShortKey() {

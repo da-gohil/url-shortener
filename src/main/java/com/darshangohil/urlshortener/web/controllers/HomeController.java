@@ -7,6 +7,7 @@ import com.darshangohil.urlshortener.domain.models.CreateShortUrlCmd;
 import com.darshangohil.urlshortener.domain.models.PagedResult;
 import com.darshangohil.urlshortener.domain.models.SecurityUser;
 import com.darshangohil.urlshortener.domain.models.ShortUrlDto;
+import com.darshangohil.urlshortener.domain.models.ShortUrlFilter;
 import com.darshangohil.urlshortener.domain.services.ShortUrlService;
 import com.darshangohil.urlshortener.web.dtos.CreateShortUrlForm;
 import com.darshangohil.urlshortener.web.utils.SecurityUtils;
@@ -23,8 +24,10 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.List;
+import java.util.Locale;
 
 @Controller
 public class HomeController {
@@ -109,23 +112,55 @@ public class HomeController {
     }
 
     @GetMapping("/my-urls")
-    public String myUrls(@RequestParam(defaultValue = "1") int page, Model model) {
+    public String myUrls(@RequestParam(defaultValue = "1") int page,
+                         @RequestParam(required = false) String q,
+                         @RequestParam(required = false) String visibility,
+                         @RequestParam(required = false) String status,
+                         @RequestParam(required = false) String sort,
+                         Model model) {
+        ShortUrlFilter filter = ShortUrlFilter.parse(q, visibility, status, sort);
         if (page < 1) {
-            return "redirect:/my-urls";
+            return "redirect:" + myUrlsLink(filter, null);
         }
         SecurityUser currentUser = securityUtils.getCurrentUser().orElseThrow();
         PagedResult<ShortUrlDto> shortUrls =
-                shortUrlService.findUrlsByUser(currentUser.getId(), page);
+                shortUrlService.findUrlsByUser(currentUser.getId(), filter, page);
         if (shortUrls.isBeyondLastPage()) {
-            return "redirect:/my-urls?page=" + shortUrls.totalPages();
+            return "redirect:" + myUrlsLink(filter, shortUrls.totalPages());
         }
 
         model.addAttribute("shortUrls", shortUrls);
         model.addAttribute("stats", shortUrlService.getUserStats(currentUser.getId()));
+        model.addAttribute("filter", filter);
+        if (filter.isFiltering()) {
+            model.addAttribute("emptyMessage", "No links match these filters.");
+        }
         model.addAttribute("activeNav", "my-urls");
         model.addAttribute("baseUrl", baseUrl);
-        model.addAttribute("paginationUrl", "/my-urls");
+        // the pager appends ?page= / &page= to this, so the filters survive paging
+        model.addAttribute("paginationUrl", myUrlsLink(filter, null));
         return "my-urls";
+    }
+
+    /** /my-urls carrying only the filter values that differ from the defaults. */
+    private static String myUrlsLink(ShortUrlFilter filter, Integer page) {
+        UriComponentsBuilder link = UriComponentsBuilder.fromPath("/my-urls");
+        if (filter.query() != null) {
+            link.queryParam("q", filter.query());
+        }
+        if (filter.visibility() != ShortUrlFilter.Visibility.ALL) {
+            link.queryParam("visibility", filter.visibility().name().toLowerCase(Locale.ROOT));
+        }
+        if (filter.status() != ShortUrlFilter.Status.ALL) {
+            link.queryParam("status", filter.status().name().toLowerCase(Locale.ROOT));
+        }
+        if (filter.sort() != ShortUrlFilter.SortOrder.NEWEST) {
+            link.queryParam("sort", filter.sort().name().toLowerCase(Locale.ROOT));
+        }
+        if (page != null) {
+            link.queryParam("page", page);
+        }
+        return link.encode().toUriString();
     }
 
     @PostMapping("/delete-urls")
