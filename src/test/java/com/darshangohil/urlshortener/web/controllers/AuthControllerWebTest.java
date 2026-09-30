@@ -7,6 +7,7 @@ import com.darshangohil.urlshortener.config.SecurityConfig;
 import com.darshangohil.urlshortener.domain.exception.EmailAlreadyExistsException;
 import com.darshangohil.urlshortener.domain.models.CreateUserCmd;
 import com.darshangohil.urlshortener.domain.models.UserDto;
+import com.darshangohil.urlshortener.domain.services.PasswordPolicy;
 import com.darshangohil.urlshortener.domain.services.UserService;
 import com.darshangohil.urlshortener.web.utils.SecurityUtils;
 import org.junit.jupiter.api.Test;
@@ -31,7 +32,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(AuthController.class)
 @EnableConfigurationProperties(RateLimitProperties.class)
-@Import({SecurityConfig.class, MethodSecurityConfig.class, SecurityUtils.class, LoginThrottle.class})
+@Import({SecurityConfig.class, MethodSecurityConfig.class, SecurityUtils.class, LoginThrottle.class, PasswordPolicy.class})
 class AuthControllerWebTest {
 
     @Autowired MockMvc mockMvc;
@@ -140,5 +141,37 @@ class AuthControllerWebTest {
                         .param("confirmPassword", "s3cretpassword"))
                 .andExpect(status().isForbidden());
         verify(userService, never()).registerUser(any());
+    }
+
+    @Test
+    void aPasswordOver72BytesIsAFormErrorNotACrash() throws Exception {
+        // 60 Java characters, so it passes the length check, but 120 bytes: BCrypt
+        // would throw, and the page used to be a 500
+        mockMvc.perform(post("/register").with(csrf())
+                        .param("name", "New User")
+                        .param("email", "new.user@example.com")
+                        .param("password", "😀".repeat(30))
+                        .param("confirmPassword", "😀".repeat(30)))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("under 72 bytes")));
+        verify(userService, never()).registerUser(any());
+    }
+
+    @Test
+    void aCommonPasswordIsRefused() throws Exception {
+        mockMvc.perform(post("/register").with(csrf())
+                        .param("name", "New User")
+                        .param("email", "new.user@example.com")
+                        .param("password", "password123")
+                        .param("confirmPassword", "password123"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("That password is too common.")));
+        verify(userService, never()).registerUser(any());
+    }
+
+    @Test
+    void theLockedOutMessageShowsOnTheLoginPage() throws Exception {
+        mockMvc.perform(get("/login").param("locked", "15"))
+                .andExpect(content().string(containsString("Too many failed sign-in attempts. Try again in 15 minutes.")));
     }
 }
