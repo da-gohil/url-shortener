@@ -130,6 +130,30 @@ class ShortUrlServiceSecurityTest {
         assertThatNoException().isThrownBy(() -> service.findUrlsByUser(stranger.getId(), 1));
     }
 
+    // --- stats ----------------------------------------------------------------------
+
+    @Test
+    void aUserCanSeeTheirOwnStats() {
+        signInAs(owner);
+
+        assertThatNoException().isThrownBy(() -> service.getUserStats(owner.getId()));
+    }
+
+    @Test
+    void aUserCannotSeeSomeoneElsesStats() {
+        signInAs(owner);
+
+        assertThatThrownBy(() -> service.getUserStats(stranger.getId()))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    void anAdminCanSeeAnyUsersStats() {
+        signInAs(admin);
+
+        assertThatNoException().isThrownBy(() -> service.getUserStats(stranger.getId()));
+    }
+
     // --- deleting -------------------------------------------------------------------
 
     @Test

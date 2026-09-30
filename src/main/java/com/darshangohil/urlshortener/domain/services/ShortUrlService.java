@@ -6,6 +6,7 @@ import com.darshangohil.urlshortener.domain.exception.InvalidUrlException;
 import com.darshangohil.urlshortener.domain.models.CreateShortUrlCmd;
 import com.darshangohil.urlshortener.domain.models.PagedResult;
 import com.darshangohil.urlshortener.domain.models.ShortUrlDto;
+import com.darshangohil.urlshortener.domain.models.UserUrlStats;
 import com.darshangohil.urlshortener.domain.repository.ShortUrlRepository;
 import com.darshangohil.urlshortener.domain.repository.UserRepository;
 import org.springframework.data.domain.Page;
@@ -60,6 +61,11 @@ public class ShortUrlService {
     public PagedResult<ShortUrlDto> findUrlsByUser(Long userId, int pageNo) {
         Page<ShortUrl> page = shortUrlRepository.findByCreatedById(userId, pageRequest(pageNo));
         return PagedResult.from(page, entityMapper::toShortUrlDto);
+    }
+
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('USER') and #userId == principal.id)")
+    public UserUrlStats getUserStats(Long userId) {
+        return shortUrlRepository.getUserStats(userId, Instant.now());
     }
 
     @PreAuthorize("hasRole('ADMIN')")

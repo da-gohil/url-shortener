@@ -121,6 +121,7 @@ public class HomeController {
         }
 
         model.addAttribute("shortUrls", shortUrls);
+        model.addAttribute("stats", shortUrlService.getUserStats(currentUser.getId()));
         model.addAttribute("activeNav", "my-urls");
         model.addAttribute("baseUrl", baseUrl);
         model.addAttribute("paginationUrl", "/my-urls");

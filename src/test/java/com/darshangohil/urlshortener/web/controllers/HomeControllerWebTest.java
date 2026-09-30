@@ -9,9 +9,11 @@ import com.darshangohil.urlshortener.domain.models.PagedResult;
 import com.darshangohil.urlshortener.domain.models.Role;
 import com.darshangohil.urlshortener.domain.models.ShortUrlDto;
 import com.darshangohil.urlshortener.domain.models.UserDto;
+import com.darshangohil.urlshortener.domain.models.UserUrlStats;
 import com.darshangohil.urlshortener.domain.services.ShortUrlService;
 import com.darshangohil.urlshortener.support.TestFixtures;
 import com.darshangohil.urlshortener.web.utils.SecurityUtils;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -51,6 +53,12 @@ class HomeControllerWebTest {
 
     @Autowired MockMvc mockMvc;
     @MockitoBean ShortUrlService shortUrlService;
+
+    @BeforeEach
+    void stubStats() {
+        // every My URLs render needs these; individual tests override when they care
+        given(shortUrlService.getUserStats(any())).willReturn(new UserUrlStats(0L, 0L, 0L));
+    }
 
     @Test
     void homeRenders() throws Exception {
@@ -366,6 +374,22 @@ class HomeControllerWebTest {
                 .andExpect(content().string(containsString("Private")))
                 .andExpect(content().string(containsString("Delete Selected")));
         verify(shortUrlService).findUrlsByUser(2L, 1);
+    }
+
+    @Test
+    void myUrlsShowsTheUsersStats() throws Exception {
+        given(shortUrlService.findUrlsByUser(eq(2L), anyInt())).willReturn(TestFixtures.onePage(List.of()));
+        given(shortUrlService.getUserStats(2L)).willReturn(new UserUrlStats(12L, 345L, 9L));
+
+        mockMvc.perform(get("/my-urls")
+                        .with(user(TestFixtures.principal(2L, "John Doe", Role.ROLE_USER))))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString(">12<")))
+                .andExpect(content().string(containsString(">345<")))
+                .andExpect(content().string(containsString(">9<")))
+                // expired is derived: 12 links - 9 active
+                .andExpect(content().string(containsString(">3<")))
+                .andExpect(content().string(containsString("Total clicks")));
     }
 
     @Test

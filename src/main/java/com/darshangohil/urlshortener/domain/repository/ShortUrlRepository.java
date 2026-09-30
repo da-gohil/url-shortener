@@ -1,6 +1,7 @@
 package com.darshangohil.urlshortener.domain.repository;
 
 import com.darshangohil.urlshortener.domain.entities.ShortUrl;
+import com.darshangohil.urlshortener.domain.models.UserUrlStats;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -48,4 +49,16 @@ public interface ShortUrlRepository extends JpaRepository<ShortUrl, Long> {
     void incrementClickCount(Long id);
 
     List<ShortUrl> findAllByIdIn(List<Long> ids);
+
+    /** One aggregate query rather than loading the user's links to count them. */
+    @Query("""
+            SELECT new com.darshangohil.urlshortener.domain.models.UserUrlStats(
+                COUNT(su),
+                COALESCE(SUM(su.clickCount), 0L),
+                COALESCE(SUM(CASE WHEN su.expiresAt IS NULL OR su.expiresAt > :now
+                                  THEN 1L ELSE 0L END), 0L))
+            FROM ShortUrl su
+            WHERE su.createdBy.id = :userId
+            """)
+    UserUrlStats getUserStats(Long userId, Instant now);
 }

@@ -11,8 +11,34 @@
 
 <body>
 <div layout:fragment="content">
-    <h1 class="mt-4">My URLs</h1>
-    <p class="text-muted" th:text="${shortUrls.totalElements} + ' total'"></p>
+    <h1 class="mt-4 mb-3">My URLs</h1>
+
+    <div class="row g-3 mb-4" th:object="${stats}">
+        <div class="col-6 col-md-3">
+            <div class="card text-center h-100"><div class="card-body">
+                <div class="fs-3 fw-semibold" th:text="*{totalLinks}">0</div>
+                <div class="text-muted small">Links</div>
+            </div></div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card text-center h-100"><div class="card-body">
+                <div class="fs-3 fw-semibold" th:text="*{totalClicks}">0</div>
+                <div class="text-muted small">Total clicks</div>
+            </div></div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card text-center h-100"><div class="card-body">
+                <div class="fs-3 fw-semibold text-success" th:text="*{activeLinks}">0</div>
+                <div class="text-muted small">Active</div>
+            </div></div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card text-center h-100"><div class="card-body">
+                <div class="fs-3 fw-semibold text-secondary" th:text="*{expiredLinks()}">0</div>
+                <div class="text-muted small">Expired</div>
+            </div></div>
+        </div>
+    </div>
 
     <div th:replace="~{fragments/url-table :: urlTable(${shortUrls}, ${baseUrl}, true, '/delete-urls', false)}"></div>
     <div th:replace="~{fragments/pagination :: pager(${shortUrls}, ${paginationUrl})}"></div>

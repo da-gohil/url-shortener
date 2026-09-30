@@ -1,6 +1,9 @@
 package com.darshangohil.urlshortener.domain.repository;
 
 import com.darshangohil.urlshortener.domain.entities.ShortUrl;
+import com.darshangohil.urlshortener.domain.entities.User;
+import com.darshangohil.urlshortener.domain.models.Role;
+import com.darshangohil.urlshortener.domain.models.UserUrlStats;
 import com.darshangohil.urlshortener.domain.services.ShortUrlService;
 import com.darshangohil.urlshortener.support.TestFixtures;
 import org.junit.jupiter.api.AfterEach;
@@ -30,12 +33,42 @@ class ShortUrlRepositoryIntegrationTest {
 
     @Autowired ShortUrlRepository shortUrlRepository;
     @Autowired ShortUrlService shortUrlService;
+    @Autowired UserRepository userRepository;
 
     private final List<Long> created = new ArrayList<>();
+    private final List<Long> createdUsers = new ArrayList<>();
 
     @AfterEach
     void cleanUp() {
         shortUrlRepository.deleteAllById(created);
+        userRepository.deleteAllById(createdUsers);
+    }
+
+    @Test
+    void userStatsCountOnlyThatUsersLinks() {
+        Instant now = Instant.now();
+        User owner = saveUser("Stats Test Owner");
+        User other = saveUser("Stats Test Other");
+        save("itSt01", false, null, owner, 10);
+        save("itSt02", true, now.plus(1, ChronoUnit.DAYS), owner, 5);
+        save("itSt03", false, now.minus(1, ChronoUnit.DAYS), owner, 2);
+        save("itSt04", false, null, other, 100);
+
+        UserUrlStats stats = shortUrlRepository.getUserStats(owner.getId(), now);
+
+        assertThat(stats.totalLinks()).isEqualTo(3);
+        assertThat(stats.totalClicks()).isEqualTo(17);
+        assertThat(stats.activeLinks()).isEqualTo(2);
+        assertThat(stats.expiredLinks()).isEqualTo(1);
+    }
+
+    @Test
+    void aUserWithNoLinksHasZeroStatsRatherThanNulls() {
+        User owner = saveUser("Stats Test Empty");
+
+        UserUrlStats stats = shortUrlRepository.getUserStats(owner.getId(), Instant.now());
+
+        assertThat(stats).isEqualTo(new UserUrlStats(0L, 0L, 0L));
     }
 
     @Test
@@ -91,11 +124,23 @@ class ShortUrlRepositoryIntegrationTest {
     }
 
     private ShortUrl save(String shortKey, boolean isPrivate, Instant expiresAt) {
-        ShortUrl shortUrl = TestFixtures.shortUrl(null, shortKey, isPrivate, null);
+        return save(shortKey, isPrivate, expiresAt, null, 0);
+    }
+
+    private ShortUrl save(String shortKey, boolean isPrivate, Instant expiresAt,
+                          User owner, long clicks) {
+        ShortUrl shortUrl = TestFixtures.shortUrl(null, shortKey, isPrivate, owner);
         shortUrl.setExpiresAt(expiresAt);
+        shortUrl.setClickCount(clicks);
         shortUrl = shortUrlRepository.save(shortUrl);
         created.add(shortUrl.getId());
         return shortUrl;
+    }
+
+    private User saveUser(String name) {
+        User user = userRepository.save(TestFixtures.user(null, name, Role.ROLE_USER));
+        createdUsers.add(user.getId());
+        return user;
     }
 
     private long clickCount(ShortUrl shortUrl) {
