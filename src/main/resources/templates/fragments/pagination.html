@@ -9,11 +9,17 @@
             <a class="page-link" th:href="@{${url}(page=${page.pageNumber - 1})}"
                tabindex="-1" aria-label="Previous">&laquo;</a>
         </li>
-        <li class="page-item"
-            th:each="i : ${#numbers.sequence(1, page.totalPages)}"
-            th:classappend="${i == page.pageNumber} ? 'active'">
-            <a class="page-link" th:href="@{${url}(page=${i})}" th:text="${i}"></a>
-        </li>
+        <!-- pageLinks() is windowed; a null entry is a gap between page numbers -->
+        <th:block th:each="i : ${page.pageLinks()}">
+            <li th:if="${i == null}" class="page-item disabled">
+                <span class="page-link">&hellip;</span>
+            </li>
+            <li th:unless="${i == null}" class="page-item"
+                th:classappend="${i == page.pageNumber} ? 'active'">
+                <a class="page-link" th:href="@{${url}(page=${i})}" th:text="${i}"
+                   th:attr="aria-current=${i == page.pageNumber} ? 'page' : null"></a>
+            </li>
+        </th:block>
         <li class="page-item" th:classappend="${page.isLast} ? 'disabled'">
             <a class="page-link" th:href="@{${url}(page=${page.pageNumber + 1})}"
                aria-label="Next">&raquo;</a>

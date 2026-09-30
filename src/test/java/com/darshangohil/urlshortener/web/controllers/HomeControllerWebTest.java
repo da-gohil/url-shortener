@@ -40,6 +40,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 
 @WebMvcTest(HomeController.class)
 @EnableConfigurationProperties(ApplicationProperties.class)
@@ -134,6 +135,20 @@ class HomeControllerWebTest {
                 .andExpect(content().string(containsString("pagination")))
                 .andExpect(content().string(containsString("?page=2")))
                 .andExpect(content().string(containsString("?page=3")));
+    }
+
+    @Test
+    void pagerCollapsesDistantPagesIntoAGap() throws Exception {
+        given(shortUrlService.findAllPublicShortUrls(anyInt()))
+                .willReturn(TestFixtures.pageOneOf(List.of(
+                        TestFixtures.dto(1L, "aB3xZ9", false, null)), 40));
+        mockMvc.perform(get("/"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("?page=3")))
+                .andExpect(content().string(containsString("&hellip;")))
+                .andExpect(content().string(containsString("?page=40")))
+                .andExpect(content().string(not(containsString("?page=20\""))))
+                .andExpect(content().string(containsString("aria-current=\"page\"")));
     }
 
     @Test
