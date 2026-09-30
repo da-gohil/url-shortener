@@ -51,7 +51,7 @@ public class ShortUrlService {
     }
 
     public PagedResult<ShortUrlDto> findAllPublicShortUrls(int pageNo) {
-        Page<ShortUrl> page = shortUrlRepository.findPublicShortUrls(pageRequest(pageNo));
+        Page<ShortUrl> page = shortUrlRepository.findActivePublicShortUrls(Instant.now(), pageRequest(pageNo));
         return PagedResult.from(page, entityMapper::toShortUrlDto);
     }
 
@@ -131,8 +131,7 @@ public class ShortUrlService {
                         || shortUrl.getExpiresAt().isAfter(Instant.now()))
                 .filter(shortUrl -> isVisibleTo(shortUrl, userId))
                 .map(shortUrl -> {
-                    shortUrl.setClickCount(shortUrl.getClickCount() + 1);
-                    shortUrlRepository.save(shortUrl);
+                    shortUrlRepository.incrementClickCount(shortUrl.getId());
                     return shortUrl.getOriginalUrl();
                 });
     }

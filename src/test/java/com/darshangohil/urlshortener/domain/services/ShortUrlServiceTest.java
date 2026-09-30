@@ -86,8 +86,7 @@ class ShortUrlServiceTest {
 
         service.accessOriginalUrl("prv001", stranger.getId());
 
-        assertThat(shortUrl.getClickCount()).isZero();
-        verify(shortUrlRepository, never()).save(any());
+        verify(shortUrlRepository, never()).incrementClickCount(any());
     }
 
     @Test
@@ -97,8 +96,7 @@ class ShortUrlServiceTest {
 
         service.accessOriginalUrl("pub001", null);
 
-        assertThat(shortUrl.getClickCount()).isEqualTo(1L);
-        verify(shortUrlRepository).save(shortUrl);
+        verify(shortUrlRepository).incrementClickCount(1L);
     }
 
     @Test
