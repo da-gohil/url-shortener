@@ -5,6 +5,7 @@ import com.darshangohil.urlshortener.domain.entities.ShortUrl;
 import com.darshangohil.urlshortener.domain.exception.InvalidUrlException;
 import com.darshangohil.urlshortener.domain.exception.ShortUrlNotFoundException;
 import com.darshangohil.urlshortener.domain.models.CreateShortUrlCmd;
+import com.darshangohil.urlshortener.domain.models.OwnerFilter;
 import com.darshangohil.urlshortener.domain.models.PagedResult;
 import com.darshangohil.urlshortener.domain.models.ShortUrlDto;
 import com.darshangohil.urlshortener.domain.models.ShortUrlFilter;
@@ -75,9 +76,12 @@ public class ShortUrlService {
         return shortUrlRepository.getUserStats(userId, Instant.now());
     }
 
+    /** Every link on the site, for the admin Links tab. */
     @PreAuthorize("hasRole('ADMIN')")
-    public PagedResult<ShortUrlDto> findAllShortUrls(int pageNo) {
-        Page<ShortUrl> page = shortUrlRepository.findAllShortUrls(pageRequest(pageNo));
+    public PagedResult<ShortUrlDto> findAllShortUrls(ShortUrlFilter filter, OwnerFilter owner, int pageNo) {
+        var spec = ShortUrlSpecifications.ownedBy(owner)
+                .and(ShortUrlSpecifications.matching(filter, Instant.now()));
+        Page<ShortUrl> page = shortUrlRepository.findAll(spec, pageRequest(pageNo, filter.sort().toSort()));
         return PagedResult.from(page, entityMapper::toShortUrlDto);
     }
 

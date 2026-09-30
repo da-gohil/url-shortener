@@ -4,6 +4,7 @@ import com.darshangohil.urlshortener.ApplicationProperties;
 import com.darshangohil.urlshortener.config.MethodSecurityConfig;
 import com.darshangohil.urlshortener.domain.entities.ShortUrl;
 import com.darshangohil.urlshortener.domain.entities.User;
+import com.darshangohil.urlshortener.domain.models.OwnerFilter;
 import com.darshangohil.urlshortener.domain.models.Role;
 import com.darshangohil.urlshortener.domain.models.ShortUrlFilter;
 import com.darshangohil.urlshortener.domain.models.UpdateShortUrlCmd;
@@ -94,16 +95,16 @@ class ShortUrlServiceSecurityTest {
     @Test
     void anAdminCanListEveryUrl() {
         signInAs(admin);
-        given(shortUrlRepository.findAllShortUrls(any(Pageable.class))).willReturn(Page.empty());
+        given(shortUrlRepository.findAll(anySpec(), any(Pageable.class))).willReturn(Page.empty());
 
-        assertThatNoException().isThrownBy(() -> service.findAllShortUrls(1));
+        assertThatNoException().isThrownBy(() -> service.findAllShortUrls(ShortUrlFilter.NONE, OwnerFilter.ANYONE, 1));
     }
 
     @Test
     void aUserCannotListEveryUrl() {
         signInAs(owner);
 
-        assertThatThrownBy(() -> service.findAllShortUrls(1))
+        assertThatThrownBy(() -> service.findAllShortUrls(ShortUrlFilter.NONE, OwnerFilter.ANYONE, 1))
                 .isInstanceOf(AccessDeniedException.class);
     }
 

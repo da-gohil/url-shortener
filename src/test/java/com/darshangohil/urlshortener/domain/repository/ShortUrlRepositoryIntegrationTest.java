@@ -2,6 +2,7 @@ package com.darshangohil.urlshortener.domain.repository;
 
 import com.darshangohil.urlshortener.domain.entities.ShortUrl;
 import com.darshangohil.urlshortener.domain.entities.User;
+import com.darshangohil.urlshortener.domain.models.OwnerFilter;
 import com.darshangohil.urlshortener.domain.models.Role;
 import com.darshangohil.urlshortener.domain.models.ShortUrlFilter;
 import com.darshangohil.urlshortener.domain.models.UserUrlStats;
@@ -82,6 +83,17 @@ class ShortUrlRepositoryIntegrationTest {
         save("itF002", false, null, other, 0);
 
         assertThat(filtered(owner, ShortUrlFilter.NONE)).containsExactly("itF001");
+    }
+
+    @Test
+    void theOwnerFilterPicksOneUserOrOnlyGuests() {
+        User owner = saveUser("Filter Test Admin Owner");
+        save("itO001", false, null, owner, 0);
+        save("itO002", false, null);   // a guest link
+
+        assertThat(byOwner(OwnerFilter.user(owner.getId()))).containsExactly("itO001");
+        assertThat(byOwner(OwnerFilter.GUESTS)).contains("itO002").doesNotContain("itO001");
+        assertThat(byOwner(OwnerFilter.ANYONE)).contains("itO001", "itO002");
     }
 
     @Test
@@ -228,6 +240,12 @@ class ShortUrlRepositoryIntegrationTest {
         var spec = ShortUrlSpecifications.ownedBy(owner.getId())
                 .and(ShortUrlSpecifications.matching(filter, Instant.now()));
         return shortUrlRepository.findAll(spec, PageRequest.of(0, 50, filter.sort().toSort()))
+                .map(ShortUrl::getShortKey)
+                .getContent();
+    }
+
+    private List<String> byOwner(OwnerFilter owner) {
+        return shortUrlRepository.findAll(ShortUrlSpecifications.ownedBy(owner), PageRequest.of(0, 1000))
                 .map(ShortUrl::getShortKey)
                 .getContent();
     }

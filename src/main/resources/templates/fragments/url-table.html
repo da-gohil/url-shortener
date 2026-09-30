@@ -5,7 +5,8 @@
 <!--
   Shared short-URL table. When `deletable` is true the rows gain a checkbox column
   and a per-row delete button, and the whole table is wrapped in a form posting
-  to `deleteUrl`. When `editable` is true each row also links to its edit page.
+  to `deleteUrl`. When `editable` is true each row also links to its edit page
+  (with ?from=`editFrom` if the page sets it, so saving returns there).
   Copy buttons, select-all and confirmations live in /app.js.
 -->
 <div th:fragment="urlTable(page, baseUrl, deletable, deleteUrl, showOwner, editable)" id="url-table">
@@ -65,7 +66,8 @@
                         <span th:if="${url.isExpired()}" class="badge bg-warning text-dark ms-1">Expired</span>
                     </td>
                     <td th:if="${deletable}" class="text-end text-nowrap">
-                        <a th:if="${editable}" th:href="@{/my-urls/{id}/edit(id=${url.id})}"
+                        <a th:if="${editable}"
+                           th:href="${editFrom != null} ? @{/my-urls/{id}/edit(id=${url.id}, from=${editFrom})} : @{/my-urls/{id}/edit(id=${url.id})}"
                            class="btn btn-sm btn-outline-primary py-0"
                            th:aria-label="'Edit ' + ${url.shortKey}">Edit</a>
                         <!-- submits its own one-row form below; forms cannot nest -->

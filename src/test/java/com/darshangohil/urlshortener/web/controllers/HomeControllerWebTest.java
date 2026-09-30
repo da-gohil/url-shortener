@@ -549,6 +549,30 @@ class HomeControllerWebTest {
     }
 
     @Test
+    void anAdminEditingFromTheDashboardGoesBackThere() throws Exception {
+        given(shortUrlService.getShortUrl(9L)).willReturn(EDITABLE);
+        given(shortUrlService.updateShortUrl(eq(9L), any())).willReturn(EDITABLE);
+        var admin = user(TestFixtures.principal(1L, "Admin User", Role.ROLE_ADMIN));
+
+        mockMvc.perform(get("/my-urls/9/edit").param("from", "admin").with(admin))
+                .andExpect(content().string(containsString("Admin · Links")))
+                .andExpect(content().string(containsString("name=\"from\" value=\"admin\"")));
+        mockMvc.perform(post("/my-urls/9/edit").with(csrf()).with(admin)
+                        .param("from", "admin").param("expiry", "keep"))
+                .andExpect(redirectedUrl("/admin/links"));
+    }
+
+    @Test
+    void anUnknownFromValueIsIgnoredRatherThanFollowed() throws Exception {
+        given(shortUrlService.updateShortUrl(eq(9L), any())).willReturn(EDITABLE);
+
+        mockMvc.perform(post("/my-urls/9/edit").with(csrf())
+                        .with(user(TestFixtures.principal(2L, "John Doe", Role.ROLE_USER)))
+                        .param("from", "https://evil.example").param("expiry", "keep"))
+                .andExpect(redirectedUrl("/my-urls"));
+    }
+
+    @Test
     void choosingDaysWithoutANumberRedisplaysTheForm() throws Exception {
         given(shortUrlService.getShortUrl(9L)).willReturn(EDITABLE);
 

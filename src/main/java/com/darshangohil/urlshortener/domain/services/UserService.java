@@ -7,11 +7,13 @@ import com.darshangohil.urlshortener.domain.models.Role;
 import com.darshangohil.urlshortener.domain.models.UserDto;
 import com.darshangohil.urlshortener.domain.repository.UserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.Locale;
+import java.util.Optional;
 
 @Service
 @Transactional(readOnly = true)
@@ -27,6 +29,11 @@ public class UserService {
         this.userRepository = userRepository;
         this.entityMapper = entityMapper;
         this.passwordEncoder = passwordEncoder;
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    public Optional<UserDto> findUser(Long id) {
+        return userRepository.findById(id).map(entityMapper::toUserDto);
     }
 
     @Transactional

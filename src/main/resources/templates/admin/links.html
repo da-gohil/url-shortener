@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}"
+>
+
+<head>
+    <title>Admin · Links</title>
+</head>
+
+<body>
+<div layout:fragment="content">
+    <h1 class="mt-4 h3">Admin Dashboard</h1>
+    <ul th:replace="~{fragments/admin-nav :: adminNav(${adminTab})}"></ul>
+
+    <div th:if="${ownerLabel}" class="alert alert-secondary d-flex align-items-center py-2">
+        <span>Showing links by <strong th:text="${ownerLabel}">someone</strong></span>
+        <a th:href="@{/admin/links}" class="ms-auto small">Show everyone's</a>
+    </div>
+
+    <div th:replace="~{fragments/url-filters :: filterForm('/admin/links', ${filter})}"></div>
+
+    <p class="text-muted small" th:text="${shortUrls.totalElements} + ' links'"></p>
+
+    <div th:replace="~{fragments/url-table :: urlTable(${shortUrls}, ${baseUrl}, true, '/admin/delete-urls', true, true)}"></div>
+    <div th:replace="~{fragments/pagination :: pager(${shortUrls}, ${paginationUrl})}"></div>
+</div>
+</body>
+</html>

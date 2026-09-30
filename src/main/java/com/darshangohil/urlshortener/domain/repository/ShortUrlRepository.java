@@ -35,10 +35,6 @@ public interface ShortUrlRepository extends JpaRepository<ShortUrl, Long>,
     @EntityGraph(attributePaths = "createdBy")
     Page<ShortUrl> findAll(Specification<ShortUrl> spec, Pageable pageable);
 
-    @EntityGraph(attributePaths = "createdBy")
-    @Query("SELECT su FROM ShortUrl su")
-    Page<ShortUrl> findAllShortUrls(Pageable pageable);
-
     boolean existsByShortKey(String shortKey);
 
     Optional<ShortUrl> findByShortKey(String shortKey);
