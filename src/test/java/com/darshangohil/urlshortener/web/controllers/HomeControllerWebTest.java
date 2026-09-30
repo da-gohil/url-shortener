@@ -233,7 +233,12 @@ class HomeControllerWebTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("<title>About</title>")))
                 .andExpect(content().string(containsString("navbar-brand")))
-                .andExpect(content().string(containsString("About URL Shortener Service Page")));
+                .andExpect(content().string(containsString("About URL Shortener")))
+                // numbers come from configuration (defaults: 30 days, 10 links an hour)
+                .andExpect(content().string(containsString("expire after 30 days")))
+                .andExpect(content().string(containsString("Up to 10 links an hour")))
+                .andExpect(content().string(containsString("Create an account")))
+                .andExpect(content().string(containsString("rel=\"noopener noreferrer\"")));
     }
 
     @Test

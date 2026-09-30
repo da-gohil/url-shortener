@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en"
       xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security"
       xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
       layout:decorate="~{layout}"
 >
@@ -10,8 +11,156 @@
 </head>
 
 <body>
-<div layout:fragment="content">
-    <h1 class="mt-4">About URL Shortener Service Page</h1>
+<div layout:fragment="content" class="about">
+
+    <section class="py-4 py-md-5">
+        <h1 class="display-6 fw-semibold">About URL Shortener</h1>
+        <p class="lead text-muted mb-0" style="max-width: 42rem">
+            Turn long, unwieldy links into short ones that are easy to share, and see how often
+            they're used. Links are checked before they're shortened, so what you share is safe
+            to click.
+        </p>
+    </section>
+
+    <section class="mb-5" aria-labelledby="how-it-works">
+        <h2 id="how-it-works" class="h4 mb-3">How it works</h2>
+        <ol class="row g-3 list-unstyled mb-0">
+            <li class="col-md-4">
+                <div class="card h-100"><div class="card-body">
+                    <span class="about__step" aria-hidden="true">1</span>
+                    <h3 class="h6 mt-3">Paste a long link</h3>
+                    <p class="text-muted small mb-0">
+                        Any http or https address. Leave off the <code>https://</code> and it's added for you.
+                    </p>
+                </div></div>
+            </li>
+            <li class="col-md-4">
+                <div class="card h-100"><div class="card-body">
+                    <span class="about__step" aria-hidden="true">2</span>
+                    <h3 class="h6 mt-3">It's checked</h3>
+                    <p class="text-muted small mb-0">
+                        We make sure the address exists and isn't somewhere a short link shouldn't point,
+                        such as a private network or a site that's been blocked.
+                    </p>
+                </div></div>
+            </li>
+            <li class="col-md-4">
+                <div class="card h-100"><div class="card-body">
+                    <span class="about__step" aria-hidden="true">3</span>
+                    <h3 class="h6 mt-3">Share it</h3>
+                    <p class="text-muted small mb-0">
+                        You get a six-character link that redirects to your page. Every visit is
+                        counted.
+                    </p>
+                </div></div>
+            </li>
+        </ol>
+    </section>
+
+    <section class="mb-5" aria-labelledby="what-you-can-do">
+        <h2 id="what-you-can-do" class="h4 mb-3">What you can do</h2>
+        <div class="row g-3">
+            <div class="col-lg-4">
+                <div class="card h-100"><div class="card-body">
+                    <h3 class="h6">Without an account</h3>
+                    <ul class="small mb-0 ps-3">
+                        <li>Shorten links straight from the home page.</li>
+                        <li th:text="'Links are public and expire after ' + ${defaultExpiryInDays} + ' days.'">
+                            Links are public and expire after 30 days.</li>
+                        <li th:text="'Up to ' + ${anonymousLinksPerHour} + ' links an hour, to keep things fair.'">
+                            Up to 10 links an hour, to keep things fair.</li>
+                    </ul>
+                </div></div>
+            </div>
+            <div class="col-lg-4">
+                <div class="card h-100 border-primary-subtle"><div class="card-body">
+                    <h3 class="h6">With a free account</h3>
+                    <ul class="small mb-0 ps-3">
+                        <li><strong>Private links</strong> that only you can open.</li>
+                        <li>Choose when a link expires, or never.</li>
+                        <li><strong>My URLs</strong>: see clicks, search, filter and sort all your links.</li>
+                        <li>Edit a link's visibility and expiry, or delete it.</li>
+                    </ul>
+                </div></div>
+            </div>
+            <div class="col-lg-4">
+                <div class="card h-100"><div class="card-body">
+                    <h3 class="h6">For administrators</h3>
+                    <ul class="small mb-0 ps-3">
+                        <li>An overview of links, users and clicks across the site.</li>
+                        <li>Disable links that shouldn't be shared, without losing their history.</li>
+                        <li>Manage accounts and roles.</li>
+                        <li>An audit log of every change.</li>
+                    </ul>
+                </div></div>
+            </div>
+        </div>
+    </section>
+
+    <section class="mb-5" aria-labelledby="safety">
+        <h2 id="safety" class="h4 mb-3">Keeping links safe</h2>
+        <div class="row g-4">
+            <div class="col-md-6">
+                <dl class="mb-0">
+                    <dt>Private means private</dt>
+                    <dd class="text-muted small">Anyone other than the owner gets the same "not found" page as a
+                        link that never existed, so private links can't be discovered by guessing.</dd>
+                    <dt>Checked destinations</dt>
+                    <dd class="text-muted small">Links to private or internal networks, links hiding a username
+                        or password, and blocked sites are refused.</dd>
+                    <dt>Expiry and moderation</dt>
+                    <dd class="text-muted small mb-md-0">Expired links stop working on their own, and an
+                        administrator can disable a harmful link at any time.</dd>
+                </dl>
+            </div>
+            <div class="col-md-6">
+                <dl class="mb-0">
+                    <dt>Protected accounts</dt>
+                    <dd class="text-muted small">Passwords are stored hashed, weak and common ones are refused,
+                        and repeated failed sign-ins lock the account for a while.</dd>
+                    <dt>Fair use</dt>
+                    <dd class="text-muted small">Rate limits stop anyone flooding the site with links.</dd>
+                    <dt>No tracking</dt>
+                    <dd class="text-muted small mb-0">Only a visit count is kept for each link, nothing about who
+                        clicked it.</dd>
+                </dl>
+            </div>
+        </div>
+    </section>
+
+    <section class="mb-5" aria-labelledby="built-with">
+        <h2 id="built-with" class="h4 mb-3">Built with</h2>
+        <ul class="list-inline mb-3">
+            <li class="list-inline-item badge text-bg-light border">Java 25</li>
+            <li class="list-inline-item badge text-bg-light border">Spring Boot 4</li>
+            <li class="list-inline-item badge text-bg-light border">Spring Security 7</li>
+            <li class="list-inline-item badge text-bg-light border">Spring Data JPA</li>
+            <li class="list-inline-item badge text-bg-light border">Thymeleaf</li>
+            <li class="list-inline-item badge text-bg-light border">PostgreSQL</li>
+            <li class="list-inline-item badge text-bg-light border">Flyway</li>
+            <li class="list-inline-item badge text-bg-light border">Bootstrap 5</li>
+        </ul>
+        <p class="text-muted mb-0">
+            Designed and built by Darshan Gohil as a portfolio project. The source is on
+            <a href="https://github.com/da-gohil/url-shortener" target="_blank"
+               rel="noopener noreferrer">GitHub</a>.
+        </p>
+    </section>
+
+    <section class="about__cta rounded-3 p-4 mb-4 d-md-flex align-items-center">
+        <div class="me-md-4 mb-3 mb-md-0">
+            <h2 class="h5 mb-1">Ready to shorten a link?</h2>
+            <p class="text-muted mb-0" sec:authorize="isAnonymous()">
+                Start right away, or create a free account for private links and stats.</p>
+            <p class="text-muted mb-0" sec:authorize="isAuthenticated()">
+                Your links and their stats are waiting in My URLs.</p>
+        </div>
+        <div class="ms-md-auto d-flex gap-2 flex-wrap">
+            <a class="btn btn-primary" th:href="@{/}">Shorten a link</a>
+            <a class="btn btn-outline-primary" th:href="@{/register}" sec:authorize="isAnonymous()">Create an account</a>
+            <a class="btn btn-outline-primary" th:href="@{/my-urls}" sec:authorize="isAuthenticated()">Go to My URLs</a>
+        </div>
+    </section>
 </div>
 </body>
 </html>
