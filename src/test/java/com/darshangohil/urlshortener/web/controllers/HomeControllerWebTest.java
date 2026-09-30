@@ -94,6 +94,19 @@ class HomeControllerWebTest {
     }
 
     @Test
+    void pagesCarryTheSecurityHeaders() throws Exception {
+        given(shortUrlService.findAllPublicShortUrls(anyInt())).willReturn(TestFixtures.onePage(List.of()));
+
+        mockMvc.perform(get("/"))
+                .andExpect(header().string("Content-Security-Policy", containsString("script-src 'self'")))
+                .andExpect(header().string("Content-Security-Policy", containsString("frame-ancestors 'none'")))
+                .andExpect(header().string("Referrer-Policy", "strict-origin-when-cross-origin"))
+                .andExpect(header().string("Permissions-Policy", containsString("camera=()")))
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+                .andExpect(header().string("X-Frame-Options", "DENY"));
+    }
+
+    @Test
     void homeRendersRowsFromThePagedResult() throws Exception {
         // guards the record-property reads the templates do (${url.shortKey}, ${page.data})
         given(shortUrlService.findAllPublicShortUrls(anyInt())).willReturn(TestFixtures.onePage(List.of(
