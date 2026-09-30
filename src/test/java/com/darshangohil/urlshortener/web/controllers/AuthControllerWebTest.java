@@ -1,6 +1,8 @@
 package com.darshangohil.urlshortener.web.controllers;
 
+import com.darshangohil.urlshortener.RateLimitProperties;
 import com.darshangohil.urlshortener.config.MethodSecurityConfig;
+import com.darshangohil.urlshortener.web.security.LoginThrottle;
 import com.darshangohil.urlshortener.config.SecurityConfig;
 import com.darshangohil.urlshortener.domain.exception.EmailAlreadyExistsException;
 import com.darshangohil.urlshortener.domain.models.CreateUserCmd;
@@ -10,6 +12,7 @@ import com.darshangohil.urlshortener.web.utils.SecurityUtils;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -27,7 +30,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(AuthController.class)
-@Import({SecurityConfig.class, MethodSecurityConfig.class, SecurityUtils.class})
+@EnableConfigurationProperties(RateLimitProperties.class)
+@Import({SecurityConfig.class, MethodSecurityConfig.class, SecurityUtils.class, LoginThrottle.class})
 class AuthControllerWebTest {
 
     @Autowired MockMvc mockMvc;

@@ -21,6 +21,10 @@
                     <div th:if="${param.error}" class="alert alert-danger" role="alert">
                         Invalid email or password.
                     </div>
+                    <div th:if="${param.locked}" class="alert alert-danger" role="alert"
+                         th:text="'Too many failed sign-in attempts. Try again in ' + ${param.locked[0]} + (${param.locked[0]} == '1' ? ' minute.' : ' minutes.')">
+                        Too many failed sign-in attempts. Try again later.
+                    </div>
                     <div th:if="${param.expired}" class="alert alert-warning" role="alert">
                         Your session ended because an administrator changed your account.
                         Please sign in again.
