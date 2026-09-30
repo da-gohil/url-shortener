@@ -40,7 +40,7 @@
                        th:classappend="${activeNav == 'my-urls'} ? 'active'"
                        th:attrappend="aria-current=${activeNav == 'my-urls'} ? 'page'">My URLs</a>
                 </li>
-                <li class="nav-item" sec:authorize="hasAuthority('ROLE_ADMIN')">
+                <li class="nav-item" sec:authorize="hasRole('ADMIN')">
                     <a class="nav-link" th:href="@{/admin/dashboard}"
                        th:classappend="${activeNav == 'admin'} ? 'active'"
                        th:attrappend="aria-current=${activeNav == 'admin'} ? 'page'">Admin Dashboard</a>

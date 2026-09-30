@@ -1,6 +1,5 @@
 package com.darshangohil.urlshortener.config;
 
-import com.darshangohil.urlshortener.domain.models.Role;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -28,7 +27,10 @@ public class SecurityConfig {
                         // anonymous visitors may still shorten a URL; they just get a
                         // public link with the default expiry
                         .requestMatchers(HttpMethod.POST, "/short-urls").permitAll()
-                        .requestMatchers("/admin/**").hasAuthority(Role.ROLE_ADMIN.name())
+                        // hasRole goes through the role hierarchy (MethodSecurityConfig),
+                        // so an admin also passes every hasRole("USER") rule
+                        .requestMatchers("/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/my-urls", "/delete-urls").hasRole("USER")
                         .anyRequest().authenticated())
                 .formLogin(form -> form
                         .loginPage("/login")

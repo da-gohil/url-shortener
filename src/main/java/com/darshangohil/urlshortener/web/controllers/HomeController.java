@@ -134,7 +134,7 @@ public class HomeController {
             redirectAttributes.addFlashAttribute("errorMessage", "No URLs selected for deletion");
             return "redirect:/my-urls";
         }
-        shortUrlService.deleteShortUrls(ids, securityUtils.getCurrentUserId(), securityUtils.isCurrentUserAdmin());
+        shortUrlService.deleteShortUrls(ids);
         redirectAttributes.addFlashAttribute("successMessage",
                 ids.size() == 1 ? "Short URL deleted" : ids.size() + " short URLs deleted");
         return "redirect:/my-urls";

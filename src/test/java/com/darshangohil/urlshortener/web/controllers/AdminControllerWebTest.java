@@ -1,6 +1,7 @@
 package com.darshangohil.urlshortener.web.controllers;
 
 import com.darshangohil.urlshortener.ApplicationProperties;
+import com.darshangohil.urlshortener.config.MethodSecurityConfig;
 import com.darshangohil.urlshortener.config.SecurityConfig;
 import com.darshangohil.urlshortener.domain.models.Role;
 import com.darshangohil.urlshortener.domain.models.UserDto;
@@ -30,7 +31,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(AdminController.class)
 @EnableConfigurationProperties(ApplicationProperties.class)
-@Import({SecurityConfig.class, SecurityUtils.class})
+@Import({SecurityConfig.class, MethodSecurityConfig.class, SecurityUtils.class})
 @TestPropertySource(properties = "app.baseUrl=http://localhost:8080")
 class AdminControllerWebTest {
 
@@ -67,13 +68,13 @@ class AdminControllerWebTest {
     }
 
     @Test
-    void adminDeleteIsFlaggedAsAdmin() throws Exception {
+    void adminDeletePassesTheIdsToTheService() throws Exception {
         mockMvc.perform(post("/admin/delete-urls").with(csrf())
                         .with(user(TestFixtures.principal(1L, "Admin User", Role.ROLE_ADMIN)))
                         .param("ids", "4"))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/admin/dashboard"));
-        verify(shortUrlService).deleteShortUrls(List.of(4L), 1L, true);
+        verify(shortUrlService).deleteShortUrls(List.of(4L));
     }
 
     @Test

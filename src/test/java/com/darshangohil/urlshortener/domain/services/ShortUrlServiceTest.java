@@ -3,7 +3,6 @@ package com.darshangohil.urlshortener.domain.services;
 import com.darshangohil.urlshortener.ApplicationProperties;
 import com.darshangohil.urlshortener.domain.entities.ShortUrl;
 import com.darshangohil.urlshortener.domain.entities.User;
-import com.darshangohil.urlshortener.domain.exception.ShortUrlAccessDeniedException;
 import com.darshangohil.urlshortener.domain.models.Role;
 import com.darshangohil.urlshortener.domain.repository.ShortUrlRepository;
 import com.darshangohil.urlshortener.domain.repository.UserRepository;
@@ -17,7 +16,6 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
@@ -120,53 +118,21 @@ class ShortUrlServiceTest {
     }
 
     @Test
-    void ownerCanDeleteTheirOwnUrls() {
+    void deleteRemovesTheGivenUrls() {
+        // who may delete what is enforced by @PreAuthorize; see ShortUrlServiceSecurityTest
         var mine = TestFixtures.shortUrl(1L, "mine01", false, owner);
         given(shortUrlRepository.findAllByIdIn(List.of(1L))).willReturn(List.of(mine));
 
-        service.deleteShortUrls(List.of(1L), owner.getId(), false);
+        service.deleteShortUrls(List.of(1L));
 
         verify(shortUrlRepository).deleteAll(List.of(mine));
     }
 
     @Test
-    void userCannotDeleteSomeoneElsesUrl() {
-        var theirs = TestFixtures.shortUrl(1L, "their1", false, stranger);
-        given(shortUrlRepository.findAllByIdIn(List.of(1L))).willReturn(List.of(theirs));
+    void deletingNothingTouchesNothing() {
+        service.deleteShortUrls(List.of());
 
-        assertThatThrownBy(() -> service.deleteShortUrls(List.of(1L), owner.getId(), false))
-                .isInstanceOf(ShortUrlAccessDeniedException.class);
         verify(shortUrlRepository, never()).deleteAll(any());
-    }
-
-    @Test
-    void aMixedBatchDeletesNothing() {
-        var mine = TestFixtures.shortUrl(1L, "mine01", false, owner);
-        var theirs = TestFixtures.shortUrl(2L, "their1", false, stranger);
-        given(shortUrlRepository.findAllByIdIn(List.of(1L, 2L))).willReturn(List.of(mine, theirs));
-
-        assertThatThrownBy(() -> service.deleteShortUrls(List.of(1L, 2L), owner.getId(), false))
-                .isInstanceOf(ShortUrlAccessDeniedException.class);
-        verify(shortUrlRepository, never()).deleteAll(any());
-    }
-
-    @Test
-    void userCannotDeleteAnAnonymouslyCreatedUrl() {
-        var guestUrl = TestFixtures.shortUrl(1L, "guest1", false, null);
-        given(shortUrlRepository.findAllByIdIn(List.of(1L))).willReturn(List.of(guestUrl));
-
-        assertThatThrownBy(() -> service.deleteShortUrls(List.of(1L), owner.getId(), false))
-                .isInstanceOf(ShortUrlAccessDeniedException.class);
-    }
-
-    @Test
-    void adminCanDeleteAnyUrl() {
-        var theirs = TestFixtures.shortUrl(1L, "their1", false, stranger);
-        given(shortUrlRepository.findAllByIdIn(List.of(1L))).willReturn(List.of(theirs));
-
-        service.deleteShortUrls(List.of(1L), 1L, true);
-
-        verify(shortUrlRepository).deleteAll(List.of(theirs));
     }
 
     @Test
