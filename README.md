@@ -5,8 +5,9 @@ A URL shortener built with Spring Boot, Spring Security, Spring Data JPA, Thymel
 ## Features
 
 ### For everyone
-- Shorten any public `http(s)` link. Links created without signing in are public and expire after 30 days.
+- Shorten any public `http(s)` link. Links created without signing in are public and expire after 30 days. The new short link appears straight away with a copy button.
 - The home page lists public links, with pagination and a copy button on each one.
+- An **About** page explains how the service works and what each kind of account can do. Its numbers (guest expiry, guest rate limit) are read from configuration, so they always match the app.
 - Short links redirect to their destination, and each visit counts a click. Clicks are counted with an atomic database update, so simultaneous visits aren't lost.
 
 ### For signed-in users
@@ -45,6 +46,21 @@ Admins can do everything a user can (role hierarchy `ADMIN > USER`), plus:
   - 8 characters to 72 bytes (BCrypt's real limit, since emoji and accented letters take several bytes each).
   - No common passwords, and nothing containing your name or email.
 - **Security headers:** a strict Content-Security-Policy (scripts only from this site; the page can't be framed), plus Referrer-Policy and Permissions-Policy. CSRF protection is on for every form.
+
+## Frontend
+
+The UI is rendered on the server with Thymeleaf: one layout, with shared fragments for the URL table, filter bar, pager, admin tabs and alerts.
+
+- **Works without JavaScript.** Every form submits normally. `app.js` only adds copy buttons, select-all and delete confirmations.
+- **Responsive.** Every page fits a 390px phone screen; wide tables scroll inside their own box instead of widening the page.
+- **Accessible:**
+  - A "Skip to main content" link and a `<main>` landmark.
+  - One `<h1>` per page.
+  - Form errors mark the field invalid and are linked to it with `aria-describedby`.
+  - The pager and every control can be used with a keyboard; buttons repeated on each row say which row they act on.
+  - The admin chart has keyboard-reachable tooltips and a table view.
+- **Safe output.** All values are HTML-escaped (no `th:utext` or inline expressions), and there are no inline scripts, which lets the strict Content-Security-Policy block scripts from anywhere else.
+- Browser tab titles name the page and the site, e.g. "About · URL Shortener".
 
 ## Tech stack
 
@@ -119,7 +135,7 @@ src/main/java/com/darshangohil/urlshortener/
     └── dtos/         form objects
 src/main/resources/
 ├── db/migration/     Flyway migrations V1–V6
-├── templates/        Thymeleaf pages and shared fragments
+├── templates/        Thymeleaf pages (layout.html decorates the rest) and shared fragments
 └── static/           styles.css, app.js (copy, select-all, confirmations)
 ```
 
