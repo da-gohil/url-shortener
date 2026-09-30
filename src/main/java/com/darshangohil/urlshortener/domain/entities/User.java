@@ -1,5 +1,6 @@
 package com.darshangohil.urlshortener.domain.entities;
 
+import com.darshangohil.urlshortener.domain.models.Role;
 import jakarta.persistence.*;
 import org.hibernate.annotations.ColumnDefault;
 import org.jspecify.annotations.NonNull;
@@ -18,8 +19,9 @@ public class User {
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
     @ColumnDefault("'ROLE_USER'")
+    @Enumerated(EnumType.STRING)
     @Column(name = "role", nullable = false, length = 50)
-    private String role;
+    private Role role;
     @Column(name = "name", nullable = false)
     private String name;
     @Column(name = "password", nullable = false)
@@ -52,11 +54,11 @@ public class User {
         this.createdAt = createdAt;
     }
 
-    public String getRole() {
+    public Role getRole() {
         return role;
     }
 
-    public void setRole(String role) {
+    public void setRole(Role role) {
         this.role = role;
     }
 

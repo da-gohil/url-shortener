@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}"
+>
+
+<head>
+    <title>My URLs</title>
+</head>
+
+<body>
+<div layout:fragment="content">
+    <h1 class="mt-4">My URLs</h1>
+    <p class="text-muted" th:text="${shortUrls.totalElements} + ' total'"></p>
+
+    <div th:replace="~{fragments/url-table :: urlTable(${shortUrls}, ${baseUrl}, true, '/delete-urls', false)}"></div>
+    <div th:replace="~{fragments/pagination :: pager(${shortUrls}, ${paginationUrl})}"></div>
+</div>
+</body>
+</html>
