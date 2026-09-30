@@ -1,13 +1,18 @@
 package com.darshangohil.urlshortener.web.controllers;
 
 import com.darshangohil.urlshortener.ApplicationProperties;
+import com.darshangohil.urlshortener.domain.exception.SelfModificationException;
 import com.darshangohil.urlshortener.domain.models.OwnerFilter;
 import com.darshangohil.urlshortener.domain.models.PagedResult;
 import com.darshangohil.urlshortener.domain.models.ShortUrlDto;
 import com.darshangohil.urlshortener.domain.models.ShortUrlFilter;
+import com.darshangohil.urlshortener.domain.models.Role;
+import com.darshangohil.urlshortener.domain.models.UserDto;
+import com.darshangohil.urlshortener.domain.models.UserSummary;
 import com.darshangohil.urlshortener.domain.services.ShortUrlService;
 import com.darshangohil.urlshortener.domain.services.UserService;
 import com.darshangohil.urlshortener.web.utils.FilterLinks;
+import com.darshangohil.urlshortener.web.utils.SecurityUtils;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -16,6 +21,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -31,13 +37,16 @@ public class AdminController {
 
     private final ShortUrlService shortUrlService;
     private final UserService userService;
+    private final SecurityUtils securityUtils;
     private final String baseUrl;
 
     public AdminController(ShortUrlService shortUrlService,
                            UserService userService,
+                           SecurityUtils securityUtils,
                            ApplicationProperties properties) {
         this.shortUrlService = shortUrlService;
         this.userService = userService;
+        this.securityUtils = securityUtils;
         this.baseUrl = properties.baseUrl();
     }
 
@@ -89,7 +98,7 @@ public class AdminController {
         ShortUrlDto link = shortUrlService.setDisabled(id, true);
         redirectAttributes.addFlashAttribute("successMessage",
                 "Disabled " + link.shortKey() + ": it no longer redirects");
-        return "redirect:" + safeReturn(returnTo);
+        return "redirect:" + safeReturn(returnTo, "/admin/links");
     }
 
     @PostMapping("/links/{id}/enable")
@@ -98,20 +107,97 @@ public class AdminController {
                          RedirectAttributes redirectAttributes) {
         ShortUrlDto link = shortUrlService.setDisabled(id, false);
         redirectAttributes.addFlashAttribute("successMessage", "Re-enabled " + link.shortKey());
-        return "redirect:" + safeReturn(returnTo);
+        return "redirect:" + safeReturn(returnTo, "/admin/links");
     }
 
     /**
-     * Back to the listing the admin was on, filters and page included. Only a path
-     * under /admin/links is accepted, so the parameter cannot redirect off-site.
+     * Back to the listing the admin was on, filters and page included. Only
+     * {@code listing} itself, optionally with a query string, is accepted, so the
+     * parameter cannot redirect anywhere else.
      */
-    private static String safeReturn(String returnTo) {
-        if (returnTo != null && returnTo.startsWith("/admin/links")
-                && (returnTo.length() == "/admin/links".length()
-                    || returnTo.charAt("/admin/links".length()) == '?')) {
+    private static String safeReturn(String returnTo, String listing) {
+        if (returnTo != null && returnTo.startsWith(listing)
+                && (returnTo.length() == listing.length() || returnTo.charAt(listing.length()) == '?')) {
             return returnTo;
         }
-        return "/admin/links";
+        return listing;
+    }
+
+    // --- users -----------------------------------------------------------------------
+
+    @GetMapping("/users")
+    public String users(@RequestParam(defaultValue = "1") int page,
+                        @RequestParam(required = false) String q,
+                        Model model) {
+        String query = q == null || q.isBlank() ? null : q.strip();
+        if (page < 1) {
+            return "redirect:" + usersLink(query, null);
+        }
+        PagedResult<UserSummary> users = userService.findUsers(query, page);
+        if (users.isBeyondLastPage()) {
+            return "redirect:" + usersLink(query, users.totalPages());
+        }
+        model.addAttribute("users", users);
+        model.addAttribute("query", query);
+        model.addAttribute("currentUserId", securityUtils.getCurrentUserId());
+        model.addAttribute("returnTo", usersLink(query, page));
+        model.addAttribute("activeNav", "admin");
+        model.addAttribute("adminTab", "users");
+        model.addAttribute("paginationUrl", usersLink(query, null));
+        return "admin/users";
+    }
+
+    @PostMapping("/users/{id}/role")
+    public String changeRole(@PathVariable Long id,
+                             @RequestParam Role role,
+                             @RequestParam(required = false) String returnTo,
+                             RedirectAttributes redirectAttributes) {
+        try {
+            UserDto user = userService.changeRole(id, role, securityUtils.getCurrentUserId());
+            redirectAttributes.addFlashAttribute("successMessage", user.name()
+                    + (role == Role.ROLE_ADMIN ? " is now an admin" : " is no longer an admin"));
+        } catch (SelfModificationException e) {
+            redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
+        }
+        return "redirect:" + safeReturn(returnTo, "/admin/users");
+    }
+
+    @PostMapping("/users/{id}/disable")
+    public String disableUser(@PathVariable Long id,
+                              @RequestParam(required = false) String returnTo,
+                              RedirectAttributes redirectAttributes) {
+        return setUserEnabled(id, false, returnTo, redirectAttributes);
+    }
+
+    @PostMapping("/users/{id}/enable")
+    public String enableUser(@PathVariable Long id,
+                             @RequestParam(required = false) String returnTo,
+                             RedirectAttributes redirectAttributes) {
+        return setUserEnabled(id, true, returnTo, redirectAttributes);
+    }
+
+    private String setUserEnabled(Long id, boolean enabled, String returnTo,
+                                  RedirectAttributes redirectAttributes) {
+        try {
+            UserDto user = userService.setEnabled(id, enabled, securityUtils.getCurrentUserId());
+            redirectAttributes.addFlashAttribute("successMessage", enabled
+                    ? "Re-enabled " + user.name()
+                    : "Disabled " + user.name() + ": they are signed out and can't sign in");
+        } catch (SelfModificationException e) {
+            redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
+        }
+        return "redirect:" + safeReturn(returnTo, "/admin/users");
+    }
+
+    private static String usersLink(String query, Integer page) {
+        UriComponentsBuilder link = UriComponentsBuilder.fromPath("/admin/users");
+        if (query != null) {
+            link.queryParam("q", query);
+        }
+        if (page != null) {
+            link.queryParam("page", page);
+        }
+        return link.encode().toUriString();
     }
 
     @PostMapping("/delete-urls")

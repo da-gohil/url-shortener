@@ -9,6 +9,8 @@ import com.darshangohil.urlshortener.domain.models.Role;
 import com.darshangohil.urlshortener.domain.models.ShortUrlDto;
 import com.darshangohil.urlshortener.domain.models.ShortUrlFilter;
 import com.darshangohil.urlshortener.domain.models.UserDto;
+import com.darshangohil.urlshortener.domain.models.UserSummary;
+import com.darshangohil.urlshortener.domain.exception.SelfModificationException;
 import com.darshangohil.urlshortener.domain.services.ShortUrlService;
 import com.darshangohil.urlshortener.domain.services.UserService;
 import com.darshangohil.urlshortener.domain.models.SecurityUser;
@@ -169,6 +171,71 @@ class AdminControllerWebTest {
     @Test
     void ordinaryUserCannotDisableALink() throws Exception {
         mockMvc.perform(post("/admin/links/4/disable").with(csrf()).with(user(JOHN)))
+                .andExpect(status().isForbidden());
+    }
+
+    // --- users tab -------------------------------------------------------------------
+
+    private static UserSummary summary(Long id, String name, Role role, boolean enabled, long links) {
+        return new UserSummary(id, name, name.toLowerCase().replace(' ', '.') + "@example.com",
+                role, enabled, java.time.OffsetDateTime.parse("2026-01-02T03:04:05Z"), links);
+    }
+
+    @Test
+    void usersTabListsAccountsButOffersNoActionsOnYourself() throws Exception {
+        given(userService.findUsers(any(), anyInt())).willReturn(TestFixtures.onePage(List.of(
+                summary(1L, "Admin User", Role.ROLE_ADMIN, true, 1),
+                summary(2L, "John Doe", Role.ROLE_USER, false, 7))));
+
+        String html = mockMvc.perform(get("/admin/users").with(user(ADMIN)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(html)
+                .contains("<title>Admin · Users</title>")
+                .contains(">You</span>")
+                // John: link count goes to his links, and he can be promoted or re-enabled
+                .contains("href=\"/admin/links?owner=2\"")
+                .contains("action=\"/admin/users/2/role\"")
+                .contains("action=\"/admin/users/2/enable\"")
+                // the signed-in admin's own row has no forms
+                .doesNotContain("/admin/users/1/role")
+                .doesNotContain("/admin/users/1/disable");
+    }
+
+    @Test
+    void theUserSearchIsPassedAlong() throws Exception {
+        given(userService.findUsers(any(), anyInt())).willReturn(TestFixtures.onePage(List.of()));
+
+        mockMvc.perform(get("/admin/users").with(user(ADMIN)).param("q", " john "))
+                .andExpect(content().string(containsString("No users match.")));
+        verify(userService).findUsers("john", 1);
+    }
+
+    @Test
+    void promotingAUserReportsIt() throws Exception {
+        given(userService.changeRole(2L, Role.ROLE_ADMIN, 1L)).willReturn(new UserDto(2L, "John Doe"));
+
+        mockMvc.perform(post("/admin/users/2/role").with(csrf()).with(user(ADMIN))
+                        .param("role", "ROLE_ADMIN").param("returnTo", "/admin/users?q=john&page=1"))
+                .andExpect(redirectedUrl("/admin/users?q=john&page=1"))
+                .andExpect(flash().attribute("successMessage", "John Doe is now an admin"));
+    }
+
+    @Test
+    void refusingSelfModificationShowsTheReason() throws Exception {
+        given(userService.setEnabled(1L, false, 1L))
+                .willThrow(new SelfModificationException("You can't disable your own account. Ask another admin."));
+
+        mockMvc.perform(post("/admin/users/1/disable").with(csrf()).with(user(ADMIN)))
+                .andExpect(redirectedUrl("/admin/users"))
+                .andExpect(flash().attribute("errorMessage", "You can't disable your own account. Ask another admin."));
+    }
+
+    @Test
+    void ordinaryUserCannotManageUsers() throws Exception {
+        mockMvc.perform(get("/admin/users").with(user(JOHN))).andExpect(status().isForbidden());
+        mockMvc.perform(post("/admin/users/3/disable").with(csrf()).with(user(JOHN)))
                 .andExpect(status().isForbidden());
     }
 

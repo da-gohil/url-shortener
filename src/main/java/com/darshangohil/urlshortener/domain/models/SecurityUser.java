@@ -16,8 +16,11 @@ public class SecurityUser extends org.springframework.security.core.userdetails.
     private final String name;
 
     public SecurityUser(User user) {
+        // a disabled account is refused at login by Spring Security's pre-authentication checks
         super(user.getEmail(),
                 user.getPassword(),
+                !Boolean.FALSE.equals(user.getEnabled()),
+                true, true, true,
                 List.of(new SimpleGrantedAuthority(user.getRole().name())));
         this.id = user.getId();
         this.name = user.getName();

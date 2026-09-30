@@ -1,5 +1,12 @@
 package com.darshangohil.urlshortener.domain.services;
 
+import com.darshangohil.urlshortener.ApplicationProperties;
+import com.darshangohil.urlshortener.domain.exception.SelfModificationException;
+import com.darshangohil.urlshortener.domain.exception.UserNotFoundException;
+import com.darshangohil.urlshortener.domain.models.PagedResult;
+import com.darshangohil.urlshortener.domain.models.UserSummary;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import com.darshangohil.urlshortener.domain.entities.User;
 import com.darshangohil.urlshortener.domain.exception.EmailAlreadyExistsException;
 import com.darshangohil.urlshortener.domain.models.CreateUserCmd;
@@ -13,22 +20,81 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
 
 @Service
 @Transactional(readOnly = true)
 public class UserService {
 
+    private static final Sort NEWEST_FIRST = Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"));
+
     private final UserRepository userRepository;
     private final EntityMapper entityMapper;
     private final PasswordEncoder passwordEncoder;
+    private final ApplicationProperties properties;
+    private final ActiveSessions activeSessions;
 
     public UserService(UserRepository userRepository,
                        EntityMapper entityMapper,
-                       PasswordEncoder passwordEncoder) {
+                       PasswordEncoder passwordEncoder,
+                       ApplicationProperties properties,
+                       ActiveSessions activeSessions) {
         this.userRepository = userRepository;
         this.entityMapper = entityMapper;
         this.passwordEncoder = passwordEncoder;
+        this.properties = properties;
+        this.activeSessions = activeSessions;
+    }
+
+    /** @param pageNo 1-based, like every other listing */
+    @PreAuthorize("hasRole('ADMIN')")
+    public PagedResult<UserSummary> findUsers(String query, int pageNo) {
+        String search = query == null ? "" : query.strip();
+        var pageable = PageRequest.of(Math.max(pageNo, 1) - 1, properties.pageSize(), NEWEST_FIRST);
+        return PagedResult.from(userRepository.findUserSummaries(search, pageable), summary -> summary);
+    }
+
+    /**
+     * Makes a user an admin or an ordinary user. Their sessions end so the new role
+     * applies straight away. An admin cannot change their own role.
+     */
+    @PreAuthorize("hasRole('ADMIN')")
+    @Transactional
+    public UserDto changeRole(Long userId, Role role, Long actingUserId) {
+        User user = findOrThrow(userId);
+        refuseSelf(userId, actingUserId, "change your own role");
+        user.setRole(role);
+        activeSessions.endAllFor(user.getEmail());
+        return entityMapper.toUserDto(user);
+    }
+
+    /**
+     * Disables or re-enables an account. Disabling ends the user's sessions and
+     * blocks sign-in; their links are left as they are. An admin cannot disable
+     * themselves.
+     */
+    @PreAuthorize("hasRole('ADMIN')")
+    @Transactional
+    public UserDto setEnabled(Long userId, boolean enabled, Long actingUserId) {
+        User user = findOrThrow(userId);
+        refuseSelf(userId, actingUserId, enabled ? "re-enable your own account" : "disable your own account");
+        user.setEnabled(enabled);
+        if (!enabled) {
+            activeSessions.endAllFor(user.getEmail());
+        }
+        return entityMapper.toUserDto(user);
+    }
+
+    private static void refuseSelf(Long userId, Long actingUserId, String what) {
+        if (Objects.equals(userId, actingUserId)) {
+            throw new SelfModificationException("You can't " + what + ". Ask another admin.");
+        }
+    }
+
+    private User findOrThrow(Long id) {
+        return userRepository.findById(id)
+                .orElseThrow(() -> new UserNotFoundException("No user with id " + id));
     }
 
     @PreAuthorize("hasRole('ADMIN')")
