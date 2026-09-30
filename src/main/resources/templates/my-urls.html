@@ -82,7 +82,7 @@
     <p th:if="${filter.isFiltering()}" class="text-muted small"
        th:text="${shortUrls.totalElements} + ' of ' + ${stats.totalLinks} + ' links match'"></p>
 
-    <div th:replace="~{fragments/url-table :: urlTable(${shortUrls}, ${baseUrl}, true, '/delete-urls', false)}"></div>
+    <div th:replace="~{fragments/url-table :: urlTable(${shortUrls}, ${baseUrl}, true, '/delete-urls', false, true)}"></div>
     <div th:replace="~{fragments/pagination :: pager(${shortUrls}, ${paginationUrl})}"></div>
 </div>
 </body>

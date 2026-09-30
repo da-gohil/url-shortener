@@ -3,10 +3,12 @@ package com.darshangohil.urlshortener.domain.services;
 import com.darshangohil.urlshortener.ApplicationProperties;
 import com.darshangohil.urlshortener.domain.entities.ShortUrl;
 import com.darshangohil.urlshortener.domain.exception.InvalidUrlException;
+import com.darshangohil.urlshortener.domain.exception.ShortUrlNotFoundException;
 import com.darshangohil.urlshortener.domain.models.CreateShortUrlCmd;
 import com.darshangohil.urlshortener.domain.models.PagedResult;
 import com.darshangohil.urlshortener.domain.models.ShortUrlDto;
 import com.darshangohil.urlshortener.domain.models.ShortUrlFilter;
+import com.darshangohil.urlshortener.domain.models.UpdateShortUrlCmd;
 import com.darshangohil.urlshortener.domain.models.UserUrlStats;
 import com.darshangohil.urlshortener.domain.repository.ShortUrlRepository;
 import com.darshangohil.urlshortener.domain.repository.ShortUrlSpecifications;
@@ -21,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -162,6 +165,38 @@ public class ShortUrlService {
         return userId != null
                 && shortUrl.getCreatedBy() != null
                 && Objects.equals(shortUrl.getCreatedBy().getId(), userId);
+    }
+
+    /** One short URL, for its owner or an admin, e.g. to fill in the edit form. */
+    @PreAuthorize("hasRole('ADMIN') or @shortUrlPermissions.owns(#id, authentication)")
+    public ShortUrlDto getShortUrl(Long id) {
+        return entityMapper.toShortUrlDto(findOrThrow(id));
+    }
+
+    /**
+     * Changes a short URL's visibility and expiry; see {@link UpdateShortUrlCmd}.
+     *
+     * <p>A link created anonymously has no owner, so it stays public whatever the
+     * command says: a private link only resolves for its owner, and this one has none.
+     */
+    @PreAuthorize("hasRole('ADMIN') or @shortUrlPermissions.owns(#id, authentication)")
+    @Transactional
+    public ShortUrlDto updateShortUrl(Long id, UpdateShortUrlCmd cmd) {
+        ShortUrl shortUrl = findOrThrow(id);
+
+        shortUrl.setIsPrivate(shortUrl.getCreatedBy() != null && cmd.isPrivate());
+        switch (cmd.expiry()) {
+            case KEEP -> { }
+            case NEVER -> shortUrl.setExpiresAt(null);
+            case DAYS -> shortUrl.setExpiresAt(Instant.now().plus(
+                    Objects.requireNonNull(cmd.expirationInDays(), "expirationInDays"), ChronoUnit.DAYS));
+        }
+        return entityMapper.toShortUrlDto(shortUrl);
+    }
+
+    private ShortUrl findOrThrow(Long id) {
+        return shortUrlRepository.findById(id)
+                .orElseThrow(() -> new ShortUrlNotFoundException("No short URL with id " + id));
     }
 
     /**

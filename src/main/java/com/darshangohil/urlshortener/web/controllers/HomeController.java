@@ -10,6 +10,7 @@ import com.darshangohil.urlshortener.domain.models.ShortUrlDto;
 import com.darshangohil.urlshortener.domain.models.ShortUrlFilter;
 import com.darshangohil.urlshortener.domain.services.ShortUrlService;
 import com.darshangohil.urlshortener.web.dtos.CreateShortUrlForm;
+import com.darshangohil.urlshortener.web.dtos.EditShortUrlForm;
 import com.darshangohil.urlshortener.web.utils.SecurityUtils;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -161,6 +162,40 @@ public class HomeController {
             link.queryParam("page", page);
         }
         return link.encode().toUriString();
+    }
+
+    @GetMapping("/my-urls/{id}/edit")
+    public String editShortUrlForm(@PathVariable Long id, Model model) {
+        ShortUrlDto shortUrl = shortUrlService.getShortUrl(id);
+        model.addAttribute("editShortUrlForm",
+                new EditShortUrlForm(shortUrl.isPrivate(), "keep", null));
+        return showEditForm(shortUrl, model);
+    }
+
+    @PostMapping("/my-urls/{id}/edit")
+    public String editShortUrl(@PathVariable Long id,
+                               @ModelAttribute("editShortUrlForm") @Valid EditShortUrlForm form,
+                               BindingResult bindingResult,
+                               RedirectAttributes redirectAttributes,
+                               Model model) {
+        if (form.isMissingDays()) {
+            bindingResult.rejectValue("expirationInDays", "expiry.days.required",
+                    "Enter how many days until the link expires");
+        }
+        if (bindingResult.hasErrors()) {
+            return showEditForm(shortUrlService.getShortUrl(id), model);
+        }
+        ShortUrlDto updated = shortUrlService.updateShortUrl(id, form.toCmd());
+        redirectAttributes.addFlashAttribute("successMessage",
+                "Updated " + baseUrl + "/s/" + updated.shortKey());
+        return "redirect:/my-urls";
+    }
+
+    private String showEditForm(ShortUrlDto shortUrl, Model model) {
+        model.addAttribute("shortUrl", shortUrl);
+        model.addAttribute("activeNav", "my-urls");
+        model.addAttribute("baseUrl", baseUrl);
+        return "edit-url";
     }
 
     @PostMapping("/delete-urls")

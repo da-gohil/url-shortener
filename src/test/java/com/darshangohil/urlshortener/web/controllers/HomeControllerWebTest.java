@@ -4,12 +4,14 @@ import com.darshangohil.urlshortener.ApplicationProperties;
 import com.darshangohil.urlshortener.config.MethodSecurityConfig;
 import com.darshangohil.urlshortener.config.SecurityConfig;
 import com.darshangohil.urlshortener.domain.exception.InvalidUrlException;
+import com.darshangohil.urlshortener.domain.exception.ShortUrlNotFoundException;
 import com.darshangohil.urlshortener.domain.models.CreateShortUrlCmd;
 import com.darshangohil.urlshortener.domain.models.PagedResult;
 import com.darshangohil.urlshortener.domain.models.Role;
 import com.darshangohil.urlshortener.domain.models.ShortUrlDto;
 import com.darshangohil.urlshortener.domain.models.ShortUrlFilter;
 import com.darshangohil.urlshortener.domain.models.UserDto;
+import com.darshangohil.urlshortener.domain.models.UpdateShortUrlCmd;
 import com.darshangohil.urlshortener.domain.models.UserUrlStats;
 import com.darshangohil.urlshortener.domain.services.ShortUrlService;
 import com.darshangohil.urlshortener.support.TestFixtures;
@@ -501,6 +503,88 @@ class HomeControllerWebTest {
         mockMvc.perform(get("/app.js"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("data-copy")));
+    }
+
+    // --- editing a link ---------------------------------------------------------------
+
+    private static final ShortUrlDto EDITABLE = new ShortUrlDto(9L, "mine01", "https://example.com/page",
+            true, null, new UserDto(2L, "John Doe"), 4L, Instant.parse("2026-01-02T03:04:05Z"));
+
+    @Test
+    void myUrlsRowsLinkToTheirEditPage() throws Exception {
+        given(shortUrlService.findUrlsByUser(eq(2L), any(), anyInt())).willReturn(TestFixtures.onePage(List.of(
+                TestFixtures.dto(9L, "mine01", false, new UserDto(2L, "John Doe")))));
+
+        mockMvc.perform(get("/my-urls").with(user(TestFixtures.principal(2L, "John Doe", Role.ROLE_USER))))
+                .andExpect(content().string(containsString("href=\"/my-urls/9/edit\"")));
+    }
+
+    @Test
+    void theEditPageShowsTheLinkAndItsCurrentSettings() throws Exception {
+        given(shortUrlService.getShortUrl(9L)).willReturn(EDITABLE);
+
+        mockMvc.perform(get("/my-urls/9/edit").with(user(TestFixtures.principal(2L, "John Doe", Role.ROLE_USER))))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("<title>Edit Link</title>")))
+                .andExpect(content().string(containsString("http://localhost:8080/s/mine01")))
+                .andExpect(content().string(containsString("https://example.com/page")))
+                // currently private, so the box starts ticked; expiry defaults to "keep"
+                .andExpect(content().string(containsString("checked=\"checked\"")))
+                .andExpect(content().string(containsString("name=\"_csrf\"")));
+    }
+
+    @Test
+    void savingAnEditUpdatesTheLinkAndReturnsToMyUrls() throws Exception {
+        given(shortUrlService.updateShortUrl(eq(9L), any())).willReturn(EDITABLE);
+
+        mockMvc.perform(post("/my-urls/9/edit").with(csrf())
+                        .with(user(TestFixtures.principal(2L, "John Doe", Role.ROLE_USER)))
+                        .param("isPrivate", "true").param("expiry", "days").param("expirationInDays", "30"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/my-urls"))
+                .andExpect(flash().attribute("successMessage", "Updated http://localhost:8080/s/mine01"));
+
+        verify(shortUrlService).updateShortUrl(9L,
+                new UpdateShortUrlCmd(true, UpdateShortUrlCmd.Expiry.DAYS, 30));
+    }
+
+    @Test
+    void choosingDaysWithoutANumberRedisplaysTheForm() throws Exception {
+        given(shortUrlService.getShortUrl(9L)).willReturn(EDITABLE);
+
+        mockMvc.perform(post("/my-urls/9/edit").with(csrf())
+                        .with(user(TestFixtures.principal(2L, "John Doe", Role.ROLE_USER)))
+                        .param("expiry", "days"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Enter how many days until the link expires")));
+        verify(shortUrlService, never()).updateShortUrl(any(), any());
+    }
+
+    @Test
+    void anOutOfRangeNumberOfDaysIsRejected() throws Exception {
+        given(shortUrlService.getShortUrl(9L)).willReturn(EDITABLE);
+
+        mockMvc.perform(post("/my-urls/9/edit").with(csrf())
+                        .with(user(TestFixtures.principal(2L, "John Doe", Role.ROLE_USER)))
+                        .param("expiry", "days").param("expirationInDays", "999"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Enter between 1 and 365 days")));
+        verify(shortUrlService, never()).updateShortUrl(any(), any());
+    }
+
+    @Test
+    void editingAnUnknownLinkIsNotFound() throws Exception {
+        given(shortUrlService.getShortUrl(404L)).willThrow(new ShortUrlNotFoundException("gone"));
+
+        mockMvc.perform(get("/my-urls/404/edit").with(user(TestFixtures.principal(2L, "John Doe", Role.ROLE_USER))))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void editingRequiresSignIn() throws Exception {
+        mockMvc.perform(get("/my-urls/9/edit"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/login"));
     }
 
     @Test

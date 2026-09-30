@@ -6,6 +6,7 @@ import com.darshangohil.urlshortener.domain.entities.ShortUrl;
 import com.darshangohil.urlshortener.domain.entities.User;
 import com.darshangohil.urlshortener.domain.models.Role;
 import com.darshangohil.urlshortener.domain.models.ShortUrlFilter;
+import com.darshangohil.urlshortener.domain.models.UpdateShortUrlCmd;
 import com.darshangohil.urlshortener.domain.repository.ShortUrlRepository;
 import com.darshangohil.urlshortener.domain.repository.UserRepository;
 import com.darshangohil.urlshortener.support.TestFixtures;
@@ -156,6 +157,34 @@ class ShortUrlServiceSecurityTest {
         assertThatNoException().isThrownBy(() -> service.getUserStats(stranger.getId()));
     }
 
+    // --- editing ---------------------------------------------------------------------
+
+    @Test
+    void anOwnerCanOpenAndEditTheirLink() {
+        signInAs(owner);
+        givenLink(TestFixtures.shortUrl(1L, "mine01", false, owner));
+
+        assertThatNoException().isThrownBy(() -> service.getShortUrl(1L));
+        assertThatNoException().isThrownBy(() -> service.updateShortUrl(1L, KEEP_ALL));
+    }
+
+    @Test
+    void aUserCannotOpenOrEditSomeoneElsesLink() {
+        signInAs(owner);
+        givenLink(TestFixtures.shortUrl(1L, "their1", false, stranger));
+
+        assertThatThrownBy(() -> service.getShortUrl(1L)).isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> service.updateShortUrl(1L, KEEP_ALL)).isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    void anAdminCanEditAnyLink() {
+        signInAs(admin);
+        givenLink(TestFixtures.shortUrl(1L, "guest1", false, null));
+
+        assertThatNoException().isThrownBy(() -> service.updateShortUrl(1L, KEEP_ALL));
+    }
+
     // --- deleting -------------------------------------------------------------------
 
     @Test
@@ -212,6 +241,14 @@ class ShortUrlServiceSecurityTest {
         service.deleteShortUrls(List.of(1L, 2L));
 
         verify(shortUrlRepository).deleteAll(List.of(theirs, guest));
+    }
+
+    private static final UpdateShortUrlCmd KEEP_ALL =
+            new UpdateShortUrlCmd(false, UpdateShortUrlCmd.Expiry.KEEP, null);
+
+    private void givenLink(ShortUrl shortUrl) {
+        given(shortUrlRepository.findAllByIdIn(List.of(shortUrl.getId()))).willReturn(List.of(shortUrl));
+        given(shortUrlRepository.findById(shortUrl.getId())).willReturn(java.util.Optional.of(shortUrl));
     }
 
     @SuppressWarnings("unchecked")
