@@ -5,6 +5,7 @@ import com.darshangohil.urlshortener.config.MethodSecurityConfig;
 import com.darshangohil.urlshortener.config.SecurityConfig;
 import com.darshangohil.urlshortener.domain.exception.InvalidUrlException;
 import com.darshangohil.urlshortener.domain.exception.ShortUrlNotFoundException;
+import com.darshangohil.urlshortener.domain.exception.UnsafeUrlException;
 import com.darshangohil.urlshortener.domain.models.CreateShortUrlCmd;
 import com.darshangohil.urlshortener.domain.models.PagedResult;
 import com.darshangohil.urlshortener.domain.models.Role;
@@ -312,6 +313,17 @@ class HomeControllerWebTest {
                 .andExpect(view().name("index"))
                 // the apostrophe renders HTML-escaped as &#39;, so assert around it
                 .andExpect(content().string(containsString("reach that URL")));
+    }
+
+    @Test
+    void anUnsafeUrlShowsTheReasonOnTheField() throws Exception {
+        given(shortUrlService.findAllPublicShortUrls(anyInt())).willReturn(TestFixtures.onePage(List.of()));
+        given(shortUrlService.createShortUrl(any()))
+                .willThrow(new UnsafeUrlException("That address points to a private or local network, which can't be shortened."));
+
+        mockMvc.perform(post("/short-urls").with(csrf()).param("originalUrl", "http://169.254.169.254/"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("points to a private or local network")));
     }
 
     @Test

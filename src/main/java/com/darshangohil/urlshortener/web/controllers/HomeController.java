@@ -3,6 +3,7 @@ package com.darshangohil.urlshortener.web.controllers;
 import com.darshangohil.urlshortener.ApplicationProperties;
 import com.darshangohil.urlshortener.domain.exception.InvalidUrlException;
 import com.darshangohil.urlshortener.domain.exception.ShortUrlNotFoundException;
+import com.darshangohil.urlshortener.domain.exception.UnsafeUrlException;
 import com.darshangohil.urlshortener.domain.models.CreateShortUrlCmd;
 import com.darshangohil.urlshortener.domain.models.PagedResult;
 import com.darshangohil.urlshortener.domain.models.SecurityUser;
@@ -92,6 +93,11 @@ public class HomeController {
             log.info("Rejected unreachable URL {}", form.originalUrl());
             bindingResult.rejectValue("originalUrl", "url.unreachable",
                     "We couldn't reach that URL. Check it and try again.");
+            addHomeAttributes(model, 1);
+            return "index";
+        }catch (UnsafeUrlException e){
+            log.info("Refused unsafe URL {}: {}", form.originalUrl(), e.getMessage());
+            bindingResult.rejectValue("originalUrl", "url.unsafe", e.getMessage());
             addHomeAttributes(model, 1);
             return "index";
         }catch (DataAccessException e){
