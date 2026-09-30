@@ -26,6 +26,12 @@ public class ShortUrlPermissions {
         this.shortUrlRepository = shortUrlRepository;
     }
 
+    /** Single-URL form of {@link #ownsAll}. */
+    @Transactional(readOnly = true)
+    public boolean owns(Long id, Authentication authentication) {
+        return ownsAll(List.of(id), authentication);
+    }
+
     /**
      * True if the signed-in user created every one of the given URLs. Anonymously
      * created URLs have no owner, so nobody but an admin can touch them. Ids that do

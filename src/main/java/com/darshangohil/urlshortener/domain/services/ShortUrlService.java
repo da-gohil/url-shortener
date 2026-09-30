@@ -3,10 +3,15 @@ package com.darshangohil.urlshortener.domain.services;
 import com.darshangohil.urlshortener.ApplicationProperties;
 import com.darshangohil.urlshortener.domain.entities.ShortUrl;
 import com.darshangohil.urlshortener.domain.exception.InvalidUrlException;
+import com.darshangohil.urlshortener.domain.exception.ShortUrlNotFoundException;
 import com.darshangohil.urlshortener.domain.models.CreateShortUrlCmd;
 import com.darshangohil.urlshortener.domain.models.PagedResult;
 import com.darshangohil.urlshortener.domain.models.ShortUrlDto;
+import com.darshangohil.urlshortener.domain.models.ShortUrlFilter;
+import com.darshangohil.urlshortener.domain.models.UpdateShortUrlCmd;
+import com.darshangohil.urlshortener.domain.models.UserUrlStats;
 import com.darshangohil.urlshortener.domain.repository.ShortUrlRepository;
+import com.darshangohil.urlshortener.domain.repository.ShortUrlSpecifications;
 import com.darshangohil.urlshortener.domain.repository.UserRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -18,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -57,9 +63,16 @@ public class ShortUrlService {
 
     /** A user may list their own URLs; an admin may list anyone's. */
     @PreAuthorize("hasRole('ADMIN') or (hasRole('USER') and #userId == principal.id)")
-    public PagedResult<ShortUrlDto> findUrlsByUser(Long userId, int pageNo) {
-        Page<ShortUrl> page = shortUrlRepository.findByCreatedById(userId, pageRequest(pageNo));
+    public PagedResult<ShortUrlDto> findUrlsByUser(Long userId, ShortUrlFilter filter, int pageNo) {
+        var spec = ShortUrlSpecifications.ownedBy(userId)
+                .and(ShortUrlSpecifications.matching(filter, Instant.now()));
+        Page<ShortUrl> page = shortUrlRepository.findAll(spec, pageRequest(pageNo, filter.sort().toSort()));
         return PagedResult.from(page, entityMapper::toShortUrlDto);
+    }
+
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('USER') and #userId == principal.id)")
+    public UserUrlStats getUserStats(Long userId) {
+        return shortUrlRepository.getUserStats(userId, Instant.now());
     }
 
     @PreAuthorize("hasRole('ADMIN')")
@@ -70,8 +83,12 @@ public class ShortUrlService {
 
     /** Callers pass a 1-based page number, matching the {@code ?page=} request parameter. */
     private Pageable pageRequest(int pageNo) {
+        return pageRequest(pageNo, NEWEST_FIRST);
+    }
+
+    private Pageable pageRequest(int pageNo, Sort sort) {
         int pageIndex = Math.max(pageNo, 1) - 1;
-        return PageRequest.of(pageIndex, properties.pageSize(), NEWEST_FIRST);
+        return PageRequest.of(pageIndex, properties.pageSize(), sort);
     }
 
     private String generateUniqueShortKey() {
@@ -148,6 +165,38 @@ public class ShortUrlService {
         return userId != null
                 && shortUrl.getCreatedBy() != null
                 && Objects.equals(shortUrl.getCreatedBy().getId(), userId);
+    }
+
+    /** One short URL, for its owner or an admin, e.g. to fill in the edit form. */
+    @PreAuthorize("hasRole('ADMIN') or @shortUrlPermissions.owns(#id, authentication)")
+    public ShortUrlDto getShortUrl(Long id) {
+        return entityMapper.toShortUrlDto(findOrThrow(id));
+    }
+
+    /**
+     * Changes a short URL's visibility and expiry; see {@link UpdateShortUrlCmd}.
+     *
+     * <p>A link created anonymously has no owner, so it stays public whatever the
+     * command says: a private link only resolves for its owner, and this one has none.
+     */
+    @PreAuthorize("hasRole('ADMIN') or @shortUrlPermissions.owns(#id, authentication)")
+    @Transactional
+    public ShortUrlDto updateShortUrl(Long id, UpdateShortUrlCmd cmd) {
+        ShortUrl shortUrl = findOrThrow(id);
+
+        shortUrl.setIsPrivate(shortUrl.getCreatedBy() != null && cmd.isPrivate());
+        switch (cmd.expiry()) {
+            case KEEP -> { }
+            case NEVER -> shortUrl.setExpiresAt(null);
+            case DAYS -> shortUrl.setExpiresAt(Instant.now().plus(
+                    Objects.requireNonNull(cmd.expirationInDays(), "expirationInDays"), ChronoUnit.DAYS));
+        }
+        return entityMapper.toShortUrlDto(shortUrl);
+    }
+
+    private ShortUrl findOrThrow(Long id) {
+        return shortUrlRepository.findById(id)
+                .orElseThrow(() -> new ShortUrlNotFoundException("No short URL with id " + id));
     }
 
     /**

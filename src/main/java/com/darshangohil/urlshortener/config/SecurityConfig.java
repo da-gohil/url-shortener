@@ -16,7 +16,7 @@ public class SecurityConfig {
     /** Everything a signed-out visitor is allowed to reach. */
     private static final String[] PUBLIC_PATHS = {
             "/", "/s/**", "/about", "/ping", "/login", "/register",
-            "/error", "/favicon.svg", "/styles.css", "/webjars/**"
+            "/error", "/favicon.svg", "/styles.css", "/app.js", "/webjars/**"
     };
 
     @Bean
@@ -30,7 +30,7 @@ public class SecurityConfig {
                         // hasRole goes through the role hierarchy (MethodSecurityConfig),
                         // so an admin also passes every hasRole("USER") rule
                         .requestMatchers("/admin/**").hasRole("ADMIN")
-                        .requestMatchers("/my-urls", "/delete-urls").hasRole("USER")
+                        .requestMatchers("/my-urls", "/my-urls/**", "/delete-urls").hasRole("USER")
                         .anyRequest().authenticated())
                 .formLogin(form -> form
                         .loginPage("/login")

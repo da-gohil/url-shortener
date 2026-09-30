@@ -14,7 +14,7 @@
     <h1 class="mt-4">Admin Dashboard</h1>
     <p class="text-muted" th:text="${shortUrls.totalElements} + ' short URLs across all users'"></p>
 
-    <div th:replace="~{fragments/url-table :: urlTable(${shortUrls}, ${baseUrl}, true, '/admin/delete-urls', true)}"></div>
+    <div th:replace="~{fragments/url-table :: urlTable(${shortUrls}, ${baseUrl}, true, '/admin/delete-urls', true, false)}"></div>
     <div th:replace="~{fragments/pagination :: pager(${shortUrls}, ${paginationUrl})}"></div>
 </div>
 </body>

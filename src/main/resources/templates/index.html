@@ -53,7 +53,7 @@
     </div>
 
     <h2 class="mt-5">Public Shortened URLs</h2>
-    <div th:replace="~{fragments/url-table :: urlTable(${shortUrls}, ${baseUrl}, false, '', true)}"></div>
+    <div th:replace="~{fragments/url-table :: urlTable(${shortUrls}, ${baseUrl}, false, '', true, false)}"></div>
     <div th:replace="~{fragments/pagination :: pager(${shortUrls}, ${paginationUrl})}"></div>
 </div>
 </body>

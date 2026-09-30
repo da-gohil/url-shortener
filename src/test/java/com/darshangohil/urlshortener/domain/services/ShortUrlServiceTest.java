@@ -3,7 +3,10 @@ package com.darshangohil.urlshortener.domain.services;
 import com.darshangohil.urlshortener.ApplicationProperties;
 import com.darshangohil.urlshortener.domain.entities.ShortUrl;
 import com.darshangohil.urlshortener.domain.entities.User;
+import com.darshangohil.urlshortener.domain.exception.ShortUrlNotFoundException;
 import com.darshangohil.urlshortener.domain.models.Role;
+import com.darshangohil.urlshortener.domain.models.UpdateShortUrlCmd;
+import com.darshangohil.urlshortener.domain.models.UpdateShortUrlCmd.Expiry;
 import com.darshangohil.urlshortener.domain.repository.ShortUrlRepository;
 import com.darshangohil.urlshortener.domain.repository.UserRepository;
 import com.darshangohil.urlshortener.support.TestFixtures;
@@ -16,6 +19,8 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.within;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
@@ -133,11 +138,76 @@ class ShortUrlServiceTest {
         verify(shortUrlRepository, never()).deleteAll(any());
     }
 
+    // --- editing (who may edit is covered by ShortUrlServiceSecurityTest) -------------
+
+    @Test
+    void updateChangesVisibility() {
+        var shortUrl = givenById(TestFixtures.shortUrl(1L, "mine01", false, owner));
+
+        service.updateShortUrl(1L, new UpdateShortUrlCmd(true, Expiry.KEEP, null));
+
+        assertThat(shortUrl.getIsPrivate()).isTrue();
+    }
+
+    @Test
+    void keepLeavesTheExpiryAlone() {
+        var shortUrl = givenById(TestFixtures.shortUrl(1L, "mine01", false, owner));
+        Instant expiry = Instant.now().plus(3, ChronoUnit.DAYS);
+        shortUrl.setExpiresAt(expiry);
+
+        service.updateShortUrl(1L, new UpdateShortUrlCmd(false, Expiry.KEEP, 99));
+
+        assertThat(shortUrl.getExpiresAt()).isEqualTo(expiry);
+    }
+
+    @Test
+    void neverRemovesTheExpiry() {
+        var shortUrl = givenById(TestFixtures.shortUrl(1L, "mine01", false, owner));
+        shortUrl.setExpiresAt(Instant.now().minus(1, ChronoUnit.DAYS));
+
+        var updated = service.updateShortUrl(1L, new UpdateShortUrlCmd(false, Expiry.NEVER, null));
+
+        assertThat(shortUrl.getExpiresAt()).isNull();
+        assertThat(updated.isExpired()).isFalse();
+    }
+
+    @Test
+    void daysSetsANewExpiryFromNow() {
+        var shortUrl = givenById(TestFixtures.shortUrl(1L, "mine01", false, owner));
+
+        service.updateShortUrl(1L, new UpdateShortUrlCmd(false, Expiry.DAYS, 7));
+
+        assertThat(shortUrl.getExpiresAt())
+                .isCloseTo(Instant.now().plus(7, ChronoUnit.DAYS), within(1, ChronoUnit.MINUTES));
+    }
+
+    @Test
+    void aGuestLinkStaysPublicBecauseNobodyCouldOpenItOtherwise() {
+        var guestUrl = givenById(TestFixtures.shortUrl(1L, "guest1", false, null));
+
+        service.updateShortUrl(1L, new UpdateShortUrlCmd(true, Expiry.KEEP, null));
+
+        assertThat(guestUrl.getIsPrivate()).isFalse();
+    }
+
+    @Test
+    void updatingAnUnknownIdIsNotFound() {
+        given(shortUrlRepository.findById(9L)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.updateShortUrl(9L, new UpdateShortUrlCmd(false, Expiry.KEEP, null)))
+                .isInstanceOf(ShortUrlNotFoundException.class);
+    }
+
     @Test
     void generatedKeysAreSixUrlSafeCharacters() {
         assertThat(ShortUrlService.generateRandomShortKey())
                 .hasSize(6)
                 .matches("[A-Za-z0-9]{6}");
+    }
+
+    private ShortUrl givenById(ShortUrl shortUrl) {
+        given(shortUrlRepository.findById(shortUrl.getId())).willReturn(Optional.of(shortUrl));
+        return shortUrl;
     }
 
     private void givenStored(ShortUrl shortUrl) {

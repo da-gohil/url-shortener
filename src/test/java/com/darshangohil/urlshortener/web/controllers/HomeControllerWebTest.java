@@ -4,14 +4,19 @@ import com.darshangohil.urlshortener.ApplicationProperties;
 import com.darshangohil.urlshortener.config.MethodSecurityConfig;
 import com.darshangohil.urlshortener.config.SecurityConfig;
 import com.darshangohil.urlshortener.domain.exception.InvalidUrlException;
+import com.darshangohil.urlshortener.domain.exception.ShortUrlNotFoundException;
 import com.darshangohil.urlshortener.domain.models.CreateShortUrlCmd;
 import com.darshangohil.urlshortener.domain.models.PagedResult;
 import com.darshangohil.urlshortener.domain.models.Role;
 import com.darshangohil.urlshortener.domain.models.ShortUrlDto;
+import com.darshangohil.urlshortener.domain.models.ShortUrlFilter;
 import com.darshangohil.urlshortener.domain.models.UserDto;
+import com.darshangohil.urlshortener.domain.models.UpdateShortUrlCmd;
+import com.darshangohil.urlshortener.domain.models.UserUrlStats;
 import com.darshangohil.urlshortener.domain.services.ShortUrlService;
 import com.darshangohil.urlshortener.support.TestFixtures;
 import com.darshangohil.urlshortener.web.utils.SecurityUtils;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -51,6 +56,12 @@ class HomeControllerWebTest {
 
     @Autowired MockMvc mockMvc;
     @MockitoBean ShortUrlService shortUrlService;
+
+    @BeforeEach
+    void stubStats() {
+        // every My URLs render needs these; individual tests override when they care
+        given(shortUrlService.getUserStats(any())).willReturn(new UserUrlStats(0L, 0L, 0L));
+    }
 
     @Test
     void homeRenders() throws Exception {
@@ -355,7 +366,7 @@ class HomeControllerWebTest {
 
     @Test
     void myUrlsListsOnlyTheSignedInUsersLinks() throws Exception {
-        given(shortUrlService.findUrlsByUser(eq(2L), anyInt())).willReturn(TestFixtures.onePage(List.of(
+        given(shortUrlService.findUrlsByUser(eq(2L), any(), anyInt())).willReturn(TestFixtures.onePage(List.of(
                 TestFixtures.dto(9L, "mine01", true, new UserDto(2L, "John Doe")))));
 
         mockMvc.perform(get("/my-urls")
@@ -365,13 +376,221 @@ class HomeControllerWebTest {
                 .andExpect(content().string(containsString("http://localhost:8080/s/mine01")))
                 .andExpect(content().string(containsString("Private")))
                 .andExpect(content().string(containsString("Delete Selected")));
-        verify(shortUrlService).findUrlsByUser(2L, 1);
+        verify(shortUrlService).findUrlsByUser(2L, ShortUrlFilter.NONE, 1);
+    }
+
+    @Test
+    void myUrlsShowsTheUsersStats() throws Exception {
+        given(shortUrlService.findUrlsByUser(eq(2L), any(), anyInt())).willReturn(TestFixtures.onePage(List.of()));
+        given(shortUrlService.getUserStats(2L)).willReturn(new UserUrlStats(12L, 345L, 9L));
+
+        mockMvc.perform(get("/my-urls")
+                        .with(user(TestFixtures.principal(2L, "John Doe", Role.ROLE_USER))))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString(">12<")))
+                .andExpect(content().string(containsString(">345<")))
+                .andExpect(content().string(containsString(">9<")))
+                // expired is derived: 12 links - 9 active
+                .andExpect(content().string(containsString(">3<")))
+                .andExpect(content().string(containsString("Total clicks")));
+    }
+
+    @Test
+    void myUrlsPassesTheFilterToTheService() throws Exception {
+        given(shortUrlService.findUrlsByUser(eq(2L), any(), anyInt())).willReturn(TestFixtures.onePage(List.of()));
+
+        mockMvc.perform(get("/my-urls")
+                        .param("q", " docs ").param("visibility", "private")
+                        .param("status", "EXPIRED").param("sort", "clicks")
+                        .with(user(TestFixtures.principal(2L, "John Doe", Role.ROLE_USER))))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("value=\"docs\"")))
+                .andExpect(content().string(containsString("No links match these filters.")))
+                .andExpect(content().string(containsString(">Clear</a>")));
+
+        verify(shortUrlService).findUrlsByUser(2L, new ShortUrlFilter("docs",
+                ShortUrlFilter.Visibility.PRIVATE, ShortUrlFilter.Status.EXPIRED,
+                ShortUrlFilter.SortOrder.CLICKS), 1);
+    }
+
+    @Test
+    void unknownFilterValuesFallBackToTheDefaults() throws Exception {
+        given(shortUrlService.findUrlsByUser(eq(2L), any(), anyInt())).willReturn(TestFixtures.onePage(List.of()));
+
+        mockMvc.perform(get("/my-urls").param("visibility", "sideways").param("sort", "random")
+                        .with(user(TestFixtures.principal(2L, "John Doe", Role.ROLE_USER))))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("No URLs to show yet.")));
+
+        verify(shortUrlService).findUrlsByUser(2L, ShortUrlFilter.NONE, 1);
+    }
+
+    @Test
+    void pagerLinksKeepTheFilters() throws Exception {
+        given(shortUrlService.findUrlsByUser(eq(2L), any(), anyInt())).willReturn(TestFixtures.pageOneOf(List.of(
+                TestFixtures.dto(9L, "mine01", false, new UserDto(2L, "John Doe"))), 3));
+
+        mockMvc.perform(get("/my-urls").param("q", "a&b").param("status", "active")
+                        .with(user(TestFixtures.principal(2L, "John Doe", Role.ROLE_USER))))
+                .andExpect(status().isOk())
+                // the search text is URL-encoded, and page= is appended with &
+                .andExpect(content().string(containsString(
+                        "/my-urls?q=a%26b&amp;status=active&amp;page=2#url-table")));
+    }
+
+    @Test
+    void outOfRangePagesRedirectWithTheFiltersKept() throws Exception {
+        given(shortUrlService.findUrlsByUser(eq(2L), any(), anyInt()))
+                .willReturn(new PagedResult<>(List.of(), 25, 9, 3, false, true, false, true));
+
+        mockMvc.perform(get("/my-urls").param("page", "9").param("sort", "oldest")
+                        .with(user(TestFixtures.principal(2L, "John Doe", Role.ROLE_USER))))
+                .andExpect(redirectedUrl("/my-urls?sort=oldest&page=3"));
+        mockMvc.perform(get("/my-urls").param("page", "0").param("sort", "oldest")
+                        .with(user(TestFixtures.principal(2L, "John Doe", Role.ROLE_USER))))
+                .andExpect(redirectedUrl("/my-urls?sort=oldest"));
+    }
+
+    @Test
+    void myUrlsRowsHaveCopySelectAllAndTheirOwnDeleteForm() throws Exception {
+        given(shortUrlService.findUrlsByUser(eq(2L), any(), anyInt())).willReturn(TestFixtures.onePage(List.of(
+                TestFixtures.dto(9L, "mine01", false, new UserDto(2L, "John Doe")))));
+
+        String html = mockMvc.perform(get("/my-urls")
+                        .with(user(TestFixtures.principal(2L, "John Doe", Role.ROLE_USER))))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(html)
+                .contains("data-copy=\"http://localhost:8080/s/mine01\"")
+                .contains("data-select-all")
+                .contains("data-row-select")
+                // the row's Delete button submits a separate one-row form...
+                .contains("form=\"delete-row-9\"")
+                .contains("data-confirm=\"Delete mine01?\"")
+                .containsPattern("<form id=\"delete-row-9\" action=\"/delete-urls\" method=\"post\" hidden>")
+                // ...which carries only that id and its own CSRF token
+                .containsPattern("(?s)id=\"delete-row-9\".*?name=\"_csrf\".*?name=\"ids\" value=\"9\"");
+    }
+
+    @Test
+    void expiredLinksAreBadged() throws Exception {
+        var expired = new ShortUrlDto(9L, "old001", "https://example.com", false,
+                Instant.now().minusSeconds(60), new UserDto(2L, "John Doe"), 0L, Instant.now());
+        given(shortUrlService.findUrlsByUser(eq(2L), any(), anyInt()))
+                .willReturn(TestFixtures.onePage(List.of(expired)));
+
+        mockMvc.perform(get("/my-urls")
+                        .with(user(TestFixtures.principal(2L, "John Doe", Role.ROLE_USER))))
+                .andExpect(content().string(containsString(">Expired</span>")));
+    }
+
+    @Test
+    void theHomePageOffersCopyButtonsButNoDeleteControls() throws Exception {
+        given(shortUrlService.findAllPublicShortUrls(anyInt())).willReturn(TestFixtures.onePage(List.of(
+                TestFixtures.dto(1L, "aB3xZ9", false, null))));
+
+        String html = mockMvc.perform(get("/")).andReturn().getResponse().getContentAsString();
+
+        assertThat(html).contains("data-copy=\"http://localhost:8080/s/aB3xZ9\"")
+                .doesNotContain("data-select-all")
+                .doesNotContain("delete-row-");
+    }
+
+    @Test
+    void theScriptIsServedToAnonymousVisitors() throws Exception {
+        // the home page loads it for everyone, so it must not sit behind the login
+        mockMvc.perform(get("/app.js"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("data-copy")));
+    }
+
+    // --- editing a link ---------------------------------------------------------------
+
+    private static final ShortUrlDto EDITABLE = new ShortUrlDto(9L, "mine01", "https://example.com/page",
+            true, null, new UserDto(2L, "John Doe"), 4L, Instant.parse("2026-01-02T03:04:05Z"));
+
+    @Test
+    void myUrlsRowsLinkToTheirEditPage() throws Exception {
+        given(shortUrlService.findUrlsByUser(eq(2L), any(), anyInt())).willReturn(TestFixtures.onePage(List.of(
+                TestFixtures.dto(9L, "mine01", false, new UserDto(2L, "John Doe")))));
+
+        mockMvc.perform(get("/my-urls").with(user(TestFixtures.principal(2L, "John Doe", Role.ROLE_USER))))
+                .andExpect(content().string(containsString("href=\"/my-urls/9/edit\"")));
+    }
+
+    @Test
+    void theEditPageShowsTheLinkAndItsCurrentSettings() throws Exception {
+        given(shortUrlService.getShortUrl(9L)).willReturn(EDITABLE);
+
+        mockMvc.perform(get("/my-urls/9/edit").with(user(TestFixtures.principal(2L, "John Doe", Role.ROLE_USER))))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("<title>Edit Link</title>")))
+                .andExpect(content().string(containsString("http://localhost:8080/s/mine01")))
+                .andExpect(content().string(containsString("https://example.com/page")))
+                // currently private, so the box starts ticked; expiry defaults to "keep"
+                .andExpect(content().string(containsString("checked=\"checked\"")))
+                .andExpect(content().string(containsString("name=\"_csrf\"")));
+    }
+
+    @Test
+    void savingAnEditUpdatesTheLinkAndReturnsToMyUrls() throws Exception {
+        given(shortUrlService.updateShortUrl(eq(9L), any())).willReturn(EDITABLE);
+
+        mockMvc.perform(post("/my-urls/9/edit").with(csrf())
+                        .with(user(TestFixtures.principal(2L, "John Doe", Role.ROLE_USER)))
+                        .param("isPrivate", "true").param("expiry", "days").param("expirationInDays", "30"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/my-urls"))
+                .andExpect(flash().attribute("successMessage", "Updated http://localhost:8080/s/mine01"));
+
+        verify(shortUrlService).updateShortUrl(9L,
+                new UpdateShortUrlCmd(true, UpdateShortUrlCmd.Expiry.DAYS, 30));
+    }
+
+    @Test
+    void choosingDaysWithoutANumberRedisplaysTheForm() throws Exception {
+        given(shortUrlService.getShortUrl(9L)).willReturn(EDITABLE);
+
+        mockMvc.perform(post("/my-urls/9/edit").with(csrf())
+                        .with(user(TestFixtures.principal(2L, "John Doe", Role.ROLE_USER)))
+                        .param("expiry", "days"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Enter how many days until the link expires")));
+        verify(shortUrlService, never()).updateShortUrl(any(), any());
+    }
+
+    @Test
+    void anOutOfRangeNumberOfDaysIsRejected() throws Exception {
+        given(shortUrlService.getShortUrl(9L)).willReturn(EDITABLE);
+
+        mockMvc.perform(post("/my-urls/9/edit").with(csrf())
+                        .with(user(TestFixtures.principal(2L, "John Doe", Role.ROLE_USER)))
+                        .param("expiry", "days").param("expirationInDays", "999"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Enter between 1 and 365 days")));
+        verify(shortUrlService, never()).updateShortUrl(any(), any());
+    }
+
+    @Test
+    void editingAnUnknownLinkIsNotFound() throws Exception {
+        given(shortUrlService.getShortUrl(404L)).willThrow(new ShortUrlNotFoundException("gone"));
+
+        mockMvc.perform(get("/my-urls/404/edit").with(user(TestFixtures.principal(2L, "John Doe", Role.ROLE_USER))))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void editingRequiresSignIn() throws Exception {
+        mockMvc.perform(get("/my-urls/9/edit"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/login"));
     }
 
     @Test
     void anAdminCanUseMyUrlsThroughTheRoleHierarchy() throws Exception {
         // /my-urls requires ROLE_USER; an admin only has ROLE_ADMIN, which implies it
-        given(shortUrlService.findUrlsByUser(eq(1L), anyInt())).willReturn(TestFixtures.onePage(List.of()));
+        given(shortUrlService.findUrlsByUser(eq(1L), any(), anyInt())).willReturn(TestFixtures.onePage(List.of()));
 
         mockMvc.perform(get("/my-urls")
                         .with(user(TestFixtures.principal(1L, "Admin User", Role.ROLE_ADMIN))))

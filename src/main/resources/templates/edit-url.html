@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}"
+>
+
+<head>
+    <title>Edit Link</title>
+</head>
+
+<body>
+<div layout:fragment="content">
+    <nav aria-label="breadcrumb" class="mt-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a th:href="@{/my-urls}">My URLs</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Edit link</li>
+        </ol>
+    </nav>
+
+    <div class="card" style="max-width: 40rem">
+        <div class="card-header">
+            <h1 class="h5 card-title mb-0" th:text="${baseUrl + '/s/' + shortUrl.shortKey}">Short link</h1>
+        </div>
+        <div class="card-body">
+            <dl class="row small mb-4">
+                <dt class="col-sm-4">Goes to</dt>
+                <dd class="col-sm-8 text-break" th:text="${shortUrl.originalUrl}"></dd>
+                <dt class="col-sm-4">Clicks</dt>
+                <dd class="col-sm-8" th:text="${shortUrl.clickCount}"></dd>
+                <dt class="col-sm-4">Currently expires</dt>
+                <dd class="col-sm-8">
+                    <span th:text="${shortUrl.expiresAt != null ? #temporals.format(shortUrl.expiresAt, 'yyyy-MM-dd HH:mm') : 'Never'}"></span>
+                    <span th:if="${shortUrl.isExpired()}" class="badge bg-warning text-dark ms-1">Expired</span>
+                </dd>
+            </dl>
+
+            <form th:action="@{/my-urls/{id}/edit(id=${shortUrl.id})}" method="post"
+                  th:object="${editShortUrlForm}">
+                <div class="mb-3 form-check">
+                    <input type="checkbox" class="form-check-input" id="isPrivate" th:field="*{isPrivate}"
+                           th:disabled="${shortUrl.createdBy == null}">
+                    <label class="form-check-label" for="isPrivate">Private (only you can open it)</label>
+                    <div th:if="${shortUrl.createdBy == null}" class="form-text">
+                        Created by a guest, so it has no owner and must stay public.
+                    </div>
+                </div>
+
+                <fieldset class="mb-3">
+                    <legend class="form-label fs-6">Expiry</legend>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" id="expiryKeep" name="expiry" value="keep"
+                               th:checked="${editShortUrlForm.expiryChoice().name() == 'KEEP'}">
+                        <label class="form-check-label" for="expiryKeep">Keep as it is</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" id="expiryNever" name="expiry" value="never"
+                               th:checked="${editShortUrlForm.expiryChoice().name() == 'NEVER'}">
+                        <label class="form-check-label" for="expiryNever">Never expire</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" id="expiryDays" name="expiry" value="days"
+                               th:checked="${editShortUrlForm.expiryChoice().name() == 'DAYS'}">
+                        <label class="form-check-label" for="expiryDays">Expire in</label>
+                        <input type="number" class="form-control form-control-sm d-inline-block ms-1"
+                               style="width: 6rem" min="1" max="365" aria-label="Days until expiry"
+                               th:field="*{expirationInDays}"
+                               th:classappend="${#fields.hasErrors('expirationInDays')} ? 'is-invalid'">
+                        <span class="ms-1">days from now</span>
+                        <div class="text-danger small" th:if="${#fields.hasErrors('expirationInDays')}"
+                             th:errors="*{expirationInDays}"></div>
+                    </div>
+                </fieldset>
+
+                <button type="submit" class="btn btn-primary">Save changes</button>
+                <a th:href="@{/my-urls}" class="btn btn-link">Cancel</a>
+            </form>
+        </div>
+    </div>
+</div>
+</body>
+</html>
