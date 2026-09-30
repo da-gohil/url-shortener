@@ -16,14 +16,15 @@ import java.util.Locale;
 @Component
 public class UrlSafetyPolicy {
 
-    private final String ownHost;
+    /** host:port of this site, the port filled in from the scheme when not given. */
+    private final String ownAuthority;
     private final List<String> blockedHosts;
     private final SafeBrowsingClient safeBrowsing;
 
     public UrlSafetyPolicy(ApplicationProperties applicationProperties,
                            UrlSafetyProperties safetyProperties,
                            SafeBrowsingClient safeBrowsing) {
-        this.ownHost = hostOf(applicationProperties.baseUrl());
+        this.ownAuthority = authorityOf(URI.create(applicationProperties.baseUrl()));
         this.blockedHosts = safetyProperties.blockedHosts().stream()
                 .map(host -> host.strip().toLowerCase(Locale.ROOT))
                 .filter(host -> !host.isEmpty())
@@ -44,7 +45,8 @@ public class UrlSafetyPolicy {
             throw new UnsafeUrlException("Links with a username or password in them can't be shortened.");
         }
         String host = uri.getHost() == null ? "" : uri.getHost().toLowerCase(Locale.ROOT);
-        if (!host.isEmpty() && host.equals(ownHost)) {
+        // host and port: localhost:5432 is a different service from a site on localhost:8080
+        if (!host.isEmpty() && authorityOf(uri).equals(ownAuthority)) {
             throw new UnsafeUrlException("That's already a link on this site, so there's nothing to shorten.");
         }
         if (blockedHosts.stream().anyMatch(blocked -> host.equals(blocked) || host.endsWith("." + blocked))) {
@@ -55,12 +57,12 @@ public class UrlSafetyPolicy {
         }
     }
 
-    private static String hostOf(String url) {
-        try {
-            String host = URI.create(url).getHost();
-            return host == null ? "" : host.toLowerCase(Locale.ROOT);
-        } catch (IllegalArgumentException e) {
-            return "";
+    private static String authorityOf(URI uri) {
+        String host = uri.getHost() == null ? "" : uri.getHost().toLowerCase(Locale.ROOT);
+        int port = uri.getPort();
+        if (port == -1) {
+            port = "https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
         }
+        return host + ":" + port;
     }
 }

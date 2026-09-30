@@ -51,6 +51,15 @@ class UrlSafetyPolicyTest {
     }
 
     @Test
+    void theSelfLinkRuleComparesThePortToo() {
+        // same host, explicit default port: still this site
+        assertThatThrownBy(() -> policy.check("https://sho.rt:443/s/abc123")).isInstanceOf(UnsafeUrlException.class);
+        // same host, another port: a different service, not a self-link
+        assertThatNoException().isThrownBy(() -> policy.check("https://sho.rt:8443/page"));
+        assertThatNoException().isThrownBy(() -> policy.check("http://sho.rt/page"));
+    }
+
+    @Test
     void blockedHostsAndTheirSubdomainsAreRefusedButLookalikesAreNot() {
         assertThatThrownBy(() -> policy.check("https://bad.example/x")).hasMessageContaining("can't be shortened here");
         assertThatThrownBy(() -> policy.check("https://www.bad.example/x")).isInstanceOf(UnsafeUrlException.class);
