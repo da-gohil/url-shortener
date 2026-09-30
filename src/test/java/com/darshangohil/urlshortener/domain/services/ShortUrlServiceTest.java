@@ -4,7 +4,9 @@ import com.darshangohil.urlshortener.ApplicationProperties;
 import com.darshangohil.urlshortener.domain.entities.ShortUrl;
 import com.darshangohil.urlshortener.domain.entities.User;
 import com.darshangohil.urlshortener.domain.exception.ShortUrlNotFoundException;
+import com.darshangohil.urlshortener.domain.exception.UnsafeUrlException;
 import com.darshangohil.urlshortener.domain.models.AuditAction;
+import com.darshangohil.urlshortener.domain.models.CreateShortUrlCmd;
 import com.darshangohil.urlshortener.domain.models.Role;
 import com.darshangohil.urlshortener.domain.models.UpdateShortUrlCmd;
 import com.darshangohil.urlshortener.domain.models.UpdateShortUrlCmd.Expiry;
@@ -24,6 +26,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.within;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -33,6 +36,7 @@ class ShortUrlServiceTest {
 
     private ShortUrlRepository shortUrlRepository;
     private AuditLog auditLog;
+    private UrlSafetyPolicy urlSafetyPolicy;
     private ShortUrlService service;
 
     private final User owner = TestFixtures.user(2L, "John Doe", Role.ROLE_USER);
@@ -44,8 +48,9 @@ class ShortUrlServiceTest {
         // validateOriginalUrl off, so these tests never touch the network
         var properties = new ApplicationProperties("http://localhost:8080", 30, false, 10);
         auditLog = mock(AuditLog.class);
+        urlSafetyPolicy = mock(UrlSafetyPolicy.class);
         service = new ShortUrlService(shortUrlRepository, new EntityMapper(), properties,
-                mock(UrlExistenceValidator.class), mock(UserRepository.class), auditLog);
+                mock(UrlExistenceValidator.class), mock(UserRepository.class), auditLog, urlSafetyPolicy);
     }
 
     @Test
@@ -273,6 +278,24 @@ class ShortUrlServiceTest {
 
         assertThatThrownBy(() -> service.updateShortUrl(9L, new UpdateShortUrlCmd(false, Expiry.KEEP, null)))
                 .isInstanceOf(ShortUrlNotFoundException.class);
+    }
+
+    @Test
+    void anUnsafeDestinationIsRefusedBeforeAnythingIsSaved() {
+        willThrow(new UnsafeUrlException("nope")).given(urlSafetyPolicy).check("https://bad.example/");
+
+        assertThatThrownBy(() -> service.createShortUrl(
+                new CreateShortUrlCmd("https://bad.example/", false, null, null)))
+                .isInstanceOf(UnsafeUrlException.class);
+        verify(shortUrlRepository, never()).save(any());
+    }
+
+    @Test
+    void aSafeDestinationIsSaved() {
+        service.createShortUrl(new CreateShortUrlCmd("https://example.com/", false, null, null));
+
+        verify(urlSafetyPolicy).check("https://example.com/");
+        verify(shortUrlRepository).save(any());
     }
 
     @Test
