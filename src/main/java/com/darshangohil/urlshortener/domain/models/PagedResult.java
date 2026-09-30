@@ -34,4 +34,13 @@ public record PagedResult<T>(
                 page.hasPrevious()
         );
     }
+
+    /**
+     * True when the requested page is past the end of a non-empty result, e.g.
+     * {@code ?page=999}, or a page emptied by deletions. An empty result is never
+     * out of range, so callers do not redirect-loop on it.
+     */
+    public boolean isBeyondLastPage() {
+        return totalPages > 0 && pageNumber > totalPages;
+    }
 }

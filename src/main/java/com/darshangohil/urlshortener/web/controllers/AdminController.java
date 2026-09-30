@@ -34,7 +34,13 @@ public class AdminController {
 
     @GetMapping("/dashboard")
     public String dashboard(@RequestParam(defaultValue = "1") int page, Model model) {
+        if (page < 1) {
+            return "redirect:/admin/dashboard";
+        }
         PagedResult<ShortUrlDto> shortUrls = shortUrlService.findAllShortUrls(page);
+        if (shortUrls.isBeyondLastPage()) {
+            return "redirect:/admin/dashboard?page=" + shortUrls.totalPages();
+        }
 
         model.addAttribute("shortUrls", shortUrls);
         model.addAttribute("activeNav", "admin");
