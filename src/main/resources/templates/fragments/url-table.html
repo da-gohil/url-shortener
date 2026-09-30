@@ -4,7 +4,8 @@
 
 <!--
   Shared short-URL table. When `deletable` is true the rows gain a checkbox column
-  and the whole table is wrapped in a form posting to `deleteUrl`.
+  and a per-row delete button, and the whole table is wrapped in a form posting
+  to `deleteUrl`. Copy buttons, select-all and confirmations live in /app.js.
 -->
 <div th:fragment="urlTable(page, baseUrl, deletable, deleteUrl, showOwner)" id="url-table">
     <!-- a page may set `emptyMessage`, e.g. when filters hide everything -->
@@ -13,12 +14,16 @@
         No URLs to show yet.
     </div>
 
-    <form th:unless="${page.data.isEmpty()}" th:action="@{${deleteUrl}}" method="post">
+    <form th:unless="${page.data.isEmpty()}" th:action="@{${deleteUrl}}" method="post"
+          data-bulk-form>
         <div class="table-responsive">
             <table class="table table-striped table-hover align-middle">
                 <thead>
                 <tr>
-                    <th th:if="${deletable}" style="width:1%"></th>
+                    <th th:if="${deletable}" style="width:1%">
+                        <input type="checkbox" class="form-check-input" data-select-all
+                               aria-label="Select all on this page">
+                    </th>
                     <th>Short URL</th>
                     <th>Original URL</th>
                     <th th:if="${showOwner}">Created By</th>
@@ -26,17 +31,21 @@
                     <th>Visibility</th>
                     <th>Created</th>
                     <th>Expires</th>
+                    <th th:if="${deletable}"><span class="visually-hidden">Actions</span></th>
                 </tr>
                 </thead>
                 <tbody>
                 <tr th:each="url : ${page.data}">
                     <td th:if="${deletable}">
-                        <input type="checkbox" class="form-check-input" name="ids"
+                        <input type="checkbox" class="form-check-input" name="ids" data-row-select
                                th:value="${url.id}" th:aria-label="'Select ' + ${url.shortKey}">
                     </td>
                     <td>
                         <a th:href="@{/s/{key}(key=${url.shortKey})}"
                            th:text="${baseUrl + '/s/' + url.shortKey}" target="_blank"></a>
+                        <button type="button" class="btn btn-sm btn-outline-secondary ms-1 py-0"
+                                th:attr="data-copy=${baseUrl + '/s/' + url.shortKey}"
+                                th:aria-label="'Copy ' + ${baseUrl + '/s/' + url.shortKey}">Copy</button>
                     </td>
                     <td>
                         <a th:href="${url.originalUrl}"
@@ -50,17 +59,33 @@
                         <span th:unless="${url.isPrivate}" class="badge bg-success">Public</span>
                     </td>
                     <td th:text="${#temporals.format(url.createdAt, 'yyyy-MM-dd HH:mm')}"></td>
-                    <td th:text="${url.expiresAt != null ? #temporals.format(url.expiresAt, 'yyyy-MM-dd HH:mm') : 'Never'}"></td>
+                    <td>
+                        <span th:text="${url.expiresAt != null ? #temporals.format(url.expiresAt, 'yyyy-MM-dd HH:mm') : 'Never'}"></span>
+                        <span th:if="${url.isExpired()}" class="badge bg-warning text-dark ms-1">Expired</span>
+                    </td>
+                    <td th:if="${deletable}" class="text-end text-nowrap">
+                        <!-- submits its own one-row form below; forms cannot nest -->
+                        <button type="submit" class="btn btn-sm btn-outline-danger py-0"
+                                th:attr="form=${'delete-row-' + url.id},
+                                         data-confirm=${'Delete ' + url.shortKey + '?'}"
+                                th:aria-label="'Delete ' + ${url.shortKey}">Delete</button>
+                    </td>
                 </tr>
                 </tbody>
             </table>
         </div>
 
         <button th:if="${deletable}" type="submit" class="btn btn-danger btn-sm"
-                onclick="return confirm('Delete the selected URLs?')">
+                data-bulk-delete data-confirm="Delete the selected URLs?">
             Delete Selected
         </button>
     </form>
+
+    <th:block th:if="${deletable}" th:each="url : ${page.data}">
+        <form th:id="${'delete-row-' + url.id}" th:action="@{${deleteUrl}}" method="post" hidden>
+            <input type="hidden" name="ids" th:value="${url.id}">
+        </form>
+    </th:block>
 </div>
 
 </body>

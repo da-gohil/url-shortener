@@ -16,7 +16,7 @@ public class SecurityConfig {
     /** Everything a signed-out visitor is allowed to reach. */
     private static final String[] PUBLIC_PATHS = {
             "/", "/s/**", "/about", "/ping", "/login", "/register",
-            "/error", "/favicon.svg", "/styles.css", "/webjars/**"
+            "/error", "/favicon.svg", "/styles.css", "/app.js", "/webjars/**"
     };
 
     @Bean

@@ -450,6 +450,60 @@ class HomeControllerWebTest {
     }
 
     @Test
+    void myUrlsRowsHaveCopySelectAllAndTheirOwnDeleteForm() throws Exception {
+        given(shortUrlService.findUrlsByUser(eq(2L), any(), anyInt())).willReturn(TestFixtures.onePage(List.of(
+                TestFixtures.dto(9L, "mine01", false, new UserDto(2L, "John Doe")))));
+
+        String html = mockMvc.perform(get("/my-urls")
+                        .with(user(TestFixtures.principal(2L, "John Doe", Role.ROLE_USER))))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(html)
+                .contains("data-copy=\"http://localhost:8080/s/mine01\"")
+                .contains("data-select-all")
+                .contains("data-row-select")
+                // the row's Delete button submits a separate one-row form...
+                .contains("form=\"delete-row-9\"")
+                .contains("data-confirm=\"Delete mine01?\"")
+                .containsPattern("<form id=\"delete-row-9\" action=\"/delete-urls\" method=\"post\" hidden>")
+                // ...which carries only that id and its own CSRF token
+                .containsPattern("(?s)id=\"delete-row-9\".*?name=\"_csrf\".*?name=\"ids\" value=\"9\"");
+    }
+
+    @Test
+    void expiredLinksAreBadged() throws Exception {
+        var expired = new ShortUrlDto(9L, "old001", "https://example.com", false,
+                Instant.now().minusSeconds(60), new UserDto(2L, "John Doe"), 0L, Instant.now());
+        given(shortUrlService.findUrlsByUser(eq(2L), any(), anyInt()))
+                .willReturn(TestFixtures.onePage(List.of(expired)));
+
+        mockMvc.perform(get("/my-urls")
+                        .with(user(TestFixtures.principal(2L, "John Doe", Role.ROLE_USER))))
+                .andExpect(content().string(containsString(">Expired</span>")));
+    }
+
+    @Test
+    void theHomePageOffersCopyButtonsButNoDeleteControls() throws Exception {
+        given(shortUrlService.findAllPublicShortUrls(anyInt())).willReturn(TestFixtures.onePage(List.of(
+                TestFixtures.dto(1L, "aB3xZ9", false, null))));
+
+        String html = mockMvc.perform(get("/")).andReturn().getResponse().getContentAsString();
+
+        assertThat(html).contains("data-copy=\"http://localhost:8080/s/aB3xZ9\"")
+                .doesNotContain("data-select-all")
+                .doesNotContain("delete-row-");
+    }
+
+    @Test
+    void theScriptIsServedToAnonymousVisitors() throws Exception {
+        // the home page loads it for everyone, so it must not sit behind the login
+        mockMvc.perform(get("/app.js"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("data-copy")));
+    }
+
+    @Test
     void anAdminCanUseMyUrlsThroughTheRoleHierarchy() throws Exception {
         // /my-urls requires ROLE_USER; an admin only has ROLE_ADMIN, which implies it
         given(shortUrlService.findUrlsByUser(eq(1L), any(), anyInt())).willReturn(TestFixtures.onePage(List.of()));
