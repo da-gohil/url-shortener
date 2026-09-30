@@ -4,6 +4,7 @@ import com.darshangohil.urlshortener.ApplicationProperties;
 import com.darshangohil.urlshortener.config.SecurityConfig;
 import com.darshangohil.urlshortener.domain.exception.InvalidUrlException;
 import com.darshangohil.urlshortener.domain.models.CreateShortUrlCmd;
+import com.darshangohil.urlshortener.domain.models.PagedResult;
 import com.darshangohil.urlshortener.domain.models.Role;
 import com.darshangohil.urlshortener.domain.models.ShortUrlDto;
 import com.darshangohil.urlshortener.domain.models.UserDto;
@@ -31,6 +32,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
@@ -38,6 +40,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 
 @WebMvcTest(HomeController.class)
 @EnableConfigurationProperties(ApplicationProperties.class)
@@ -131,7 +134,23 @@ class HomeControllerWebTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("pagination")))
                 .andExpect(content().string(containsString("?page=2")))
-                .andExpect(content().string(containsString("?page=3")));
+                .andExpect(content().string(containsString("?page=3")))
+                // pager links jump back down to the table, not the top of the page
+                .andExpect(content().string(containsString("?page=2#url-table")));
+    }
+
+    @Test
+    void pagerCollapsesDistantPagesIntoAGap() throws Exception {
+        given(shortUrlService.findAllPublicShortUrls(anyInt()))
+                .willReturn(TestFixtures.pageOneOf(List.of(
+                        TestFixtures.dto(1L, "aB3xZ9", false, null)), 40));
+        mockMvc.perform(get("/"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("?page=3")))
+                .andExpect(content().string(containsString("&hellip;")))
+                .andExpect(content().string(containsString("?page=40")))
+                .andExpect(content().string(not(containsString("?page=20\""))))
+                .andExpect(content().string(containsString("aria-current=\"page\"")));
     }
 
     @Test
@@ -140,6 +159,32 @@ class HomeControllerWebTest {
                 .willReturn(TestFixtures.onePage(List.of()));
         mockMvc.perform(get("/").param("page", "2")).andExpect(status().isOk());
         verify(shortUrlService).findAllPublicShortUrls(2);
+    }
+
+    @Test
+    void nonNumericPageRedirectsToTheFirstPage() throws Exception {
+        mockMvc.perform(get("/").param("page", "abc"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/"));
+    }
+
+    @Test
+    void zeroOrNegativePageRedirectsToTheFirstPage() throws Exception {
+        for (String page : List.of("0", "-5")) {
+            mockMvc.perform(get("/").param("page", page))
+                    .andExpect(status().is3xxRedirection())
+                    .andExpect(redirectedUrl("/"));
+        }
+        verify(shortUrlService, never()).findAllPublicShortUrls(anyInt());
+    }
+
+    @Test
+    void pageBeyondTheLastRedirectsToTheLastPage() throws Exception {
+        given(shortUrlService.findAllPublicShortUrls(anyInt()))
+                .willReturn(new PagedResult<>(List.of(), 25, 999, 3, false, true, false, true));
+        mockMvc.perform(get("/").param("page", "999"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/?page=3"));
     }
 
     @Test

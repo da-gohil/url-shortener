@@ -51,10 +51,7 @@ public class ShortUrlService {
     }
 
     public PagedResult<ShortUrlDto> findAllPublicShortUrls(int pageNo) {
-
-        Pageable pageable = PageRequest.of(0,10, Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<ShortUrl> page = shortUrlRepository.findPublicShortUrls(pageRequest(pageNo));
-
         return PagedResult.from(page, entityMapper::toShortUrlDto);
     }
 

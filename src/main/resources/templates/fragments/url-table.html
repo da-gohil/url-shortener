@@ -6,7 +6,7 @@
   Shared short-URL table. When `deletable` is true the rows gain a checkbox column
   and the whole table is wrapped in a form posting to `deleteUrl`.
 -->
-<div th:fragment="urlTable(page, baseUrl, deletable, deleteUrl, showOwner)">
+<div th:fragment="urlTable(page, baseUrl, deletable, deleteUrl, showOwner)" id="url-table">
     <div th:if="${page.data.isEmpty()}" class="alert alert-info">
         No URLs to show yet.
     </div>

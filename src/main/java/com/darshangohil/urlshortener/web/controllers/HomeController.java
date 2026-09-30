@@ -44,7 +44,13 @@ public class HomeController {
 
     @GetMapping("/")
     public String home(@RequestParam(defaultValue = "1") int page, Model model) {
-        addHomeAttributes(model, page);
+        if (page < 1) {
+            return "redirect:/";
+        }
+        PagedResult<ShortUrlDto> shortUrls = addHomeAttributes(model, page);
+        if (shortUrls.isBeyondLastPage()) {
+            return "redirect:/?page=" + shortUrls.totalPages();
+        }
         model.addAttribute("createShortUrlForm", new CreateShortUrlForm());
         return "index";
     }
@@ -104,9 +110,15 @@ public class HomeController {
 
     @GetMapping("/my-urls")
     public String myUrls(@RequestParam(defaultValue = "1") int page, Model model) {
+        if (page < 1) {
+            return "redirect:/my-urls";
+        }
         SecurityUser currentUser = securityUtils.getCurrentUser().orElseThrow();
         PagedResult<ShortUrlDto> shortUrls =
                 shortUrlService.findUrlsByUser(currentUser.getId(), page);
+        if (shortUrls.isBeyondLastPage()) {
+            return "redirect:/my-urls?page=" + shortUrls.totalPages();
+        }
 
         model.addAttribute("shortUrls", shortUrls);
         model.addAttribute("activeNav", "my-urls");
@@ -128,12 +140,13 @@ public class HomeController {
         return "redirect:/my-urls";
     }
 
-    private void addHomeAttributes(Model model, int page) {
+    private PagedResult<ShortUrlDto> addHomeAttributes(Model model, int page) {
         PagedResult<ShortUrlDto> shortUrls = shortUrlService.findAllPublicShortUrls(page);
 
         model.addAttribute("shortUrls", shortUrls);
         model.addAttribute("activeNav", "home");
         model.addAttribute("baseUrl", baseUrl);
         model.addAttribute("paginationUrl", "/");
+        return shortUrls;
     }
 }

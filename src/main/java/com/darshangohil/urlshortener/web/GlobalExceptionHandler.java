@@ -2,6 +2,7 @@ package com.darshangohil.urlshortener.web;
 
 import com.darshangohil.urlshortener.domain.exception.ShortUrlAccessDeniedException;
 import com.darshangohil.urlshortener.domain.exception.ShortUrlNotFoundException;
+import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.ModelAndView;
 
 @ControllerAdvice
@@ -28,6 +30,23 @@ public class GlobalExceptionHandler {
     ModelAndView handleShortUrlAccessDenied(ShortUrlAccessDeniedException ex){
         log.warn("Refused short URL deletion: {}", ex.getMessage());
         return new ModelAndView("error/403", HttpStatus.FORBIDDEN);
+    }
+
+    /**
+     * A non-numeric {@code ?page=} (e.g. {@code ?page=abc}) sends the visitor back to
+     * the first page of the same listing rather than an error page. Any other bad
+     * parameter falls through to the generic handling.
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    ModelAndView handleTypeMismatch(MethodArgumentTypeMismatchException ex,
+                                    HttpServletRequest request) throws Exception {
+        if ("page".equals(ex.getName())) {
+            // "redirect:" re-adds the context path, so strip it here; dropping the
+            // query string is what lands the visitor on page 1
+            String path = request.getRequestURI().substring(request.getContextPath().length());
+            return new ModelAndView("redirect:" + path);
+        }
+        return handleException(ex);
     }
 
     @ExceptionHandler(Exception.class)
