@@ -7,7 +7,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class UrlExistenceValidatorTest {
 
-    private final UrlExistenceValidator validator = new UrlExistenceValidator();
+    private final UrlExistenceValidator validator = new UrlExistenceValidator(new DestinationGuard());
 
     @Test
     void unreachableHostIsRejected() {

@@ -50,18 +50,21 @@ public class ShortUrlService {
     private final UrlExistenceValidator urlExistenceValidator;
     private final UserRepository userRepository;
     private final AuditLog auditLog;
+    private final UrlSafetyPolicy urlSafetyPolicy;
 
     public ShortUrlService(ShortUrlRepository shortUrlRepository,
                            EntityMapper entityMapper,
                            ApplicationProperties properties,
                            UrlExistenceValidator urlExistenceValidator, UserRepository userRepository,
-                           AuditLog auditLog) {
+                           AuditLog auditLog,
+                           UrlSafetyPolicy urlSafetyPolicy) {
         this.shortUrlRepository = shortUrlRepository;
         this.entityMapper = entityMapper;
         this.properties = properties;
         this.urlExistenceValidator = urlExistenceValidator;
         this.userRepository = userRepository;
         this.auditLog = auditLog;
+        this.urlSafetyPolicy = urlSafetyPolicy;
     }
 
     public PagedResult<ShortUrlDto> findAllPublicShortUrls(int pageNo) {
@@ -112,6 +115,7 @@ public class ShortUrlService {
 
     @Transactional
     public ShortUrlDto createShortUrl(CreateShortUrlCmd cmd) {
+        urlSafetyPolicy.check(cmd.originalUrl());
 
         if (properties.validateOriginalUrl()) {
             boolean urlExists = urlExistenceValidator.isUrlExists(cmd.originalUrl());

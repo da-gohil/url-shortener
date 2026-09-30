@@ -1,10 +1,13 @@
 package com.darshangohil.urlshortener.web.controllers;
 
 import com.darshangohil.urlshortener.ApplicationProperties;
+import com.darshangohil.urlshortener.RateLimitProperties;
+import com.darshangohil.urlshortener.web.security.LoginThrottle;
 import com.darshangohil.urlshortener.config.MethodSecurityConfig;
 import com.darshangohil.urlshortener.config.SecurityConfig;
 import com.darshangohil.urlshortener.domain.exception.InvalidUrlException;
 import com.darshangohil.urlshortener.domain.exception.ShortUrlNotFoundException;
+import com.darshangohil.urlshortener.domain.exception.UnsafeUrlException;
 import com.darshangohil.urlshortener.domain.models.CreateShortUrlCmd;
 import com.darshangohil.urlshortener.domain.models.PagedResult;
 import com.darshangohil.urlshortener.domain.models.Role;
@@ -15,6 +18,8 @@ import com.darshangohil.urlshortener.domain.models.UpdateShortUrlCmd;
 import com.darshangohil.urlshortener.domain.models.UserUrlStats;
 import com.darshangohil.urlshortener.domain.services.ShortUrlService;
 import com.darshangohil.urlshortener.support.TestFixtures;
+import com.darshangohil.urlshortener.web.security.FixedWindowRateLimiter;
+import com.darshangohil.urlshortener.web.security.LinkCreationLimiter;
 import com.darshangohil.urlshortener.web.utils.SecurityUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,6 +32,7 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -35,7 +41,9 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
@@ -49,13 +57,20 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 
 @WebMvcTest(HomeController.class)
-@EnableConfigurationProperties(ApplicationProperties.class)
-@Import({SecurityConfig.class, MethodSecurityConfig.class, SecurityUtils.class})
+@EnableConfigurationProperties({ApplicationProperties.class, RateLimitProperties.class})
+@Import({SecurityConfig.class, MethodSecurityConfig.class, SecurityUtils.class, LoginThrottle.class})
 @TestPropertySource(properties = "app.baseUrl=http://localhost:8080")
 class HomeControllerWebTest {
 
     @Autowired MockMvc mockMvc;
     @MockitoBean ShortUrlService shortUrlService;
+    @MockitoBean LinkCreationLimiter linkCreationLimiter;
+
+    @BeforeEach
+    void notRateLimited() {
+        given(linkCreationLimiter.attempt(any(), anyBoolean(), any()))
+                .willReturn(new FixedWindowRateLimiter.Status(false, Duration.ZERO));
+    }
 
     @BeforeEach
     void stubStats() {
@@ -76,6 +91,19 @@ class HomeControllerWebTest {
                 .andExpect(content().string(containsString("built by Darshan Gohil")))
                 .andExpect(content().string(containsString("Create a Short URL")))
                 .andExpect(content().string(containsString("nav-link active")));
+    }
+
+    @Test
+    void pagesCarryTheSecurityHeaders() throws Exception {
+        given(shortUrlService.findAllPublicShortUrls(anyInt())).willReturn(TestFixtures.onePage(List.of()));
+
+        mockMvc.perform(get("/"))
+                .andExpect(header().string("Content-Security-Policy", containsString("script-src 'self'")))
+                .andExpect(header().string("Content-Security-Policy", containsString("frame-ancestors 'none'")))
+                .andExpect(header().string("Referrer-Policy", "strict-origin-when-cross-origin"))
+                .andExpect(header().string("Permissions-Policy", containsString("camera=()")))
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+                .andExpect(header().string("X-Frame-Options", "DENY"));
     }
 
     @Test
@@ -312,6 +340,41 @@ class HomeControllerWebTest {
                 .andExpect(view().name("index"))
                 // the apostrophe renders HTML-escaped as &#39;, so assert around it
                 .andExpect(content().string(containsString("reach that URL")));
+    }
+
+    @Test
+    void anUnsafeUrlShowsTheReasonOnTheField() throws Exception {
+        given(shortUrlService.findAllPublicShortUrls(anyInt())).willReturn(TestFixtures.onePage(List.of()));
+        given(shortUrlService.createShortUrl(any()))
+                .willThrow(new UnsafeUrlException("That address points to a private or local network, which can't be shortened."));
+
+        mockMvc.perform(post("/short-urls").with(csrf()).param("originalUrl", "http://169.254.169.254/"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("points to a private or local network")));
+    }
+
+    @Test
+    void tooManyLinksGetsA429AndNothingIsCreated() throws Exception {
+        given(shortUrlService.findAllPublicShortUrls(anyInt())).willReturn(TestFixtures.onePage(List.of()));
+        given(linkCreationLimiter.attempt(isNull(), eq(false), eq("127.0.0.1")))
+                .willReturn(new FixedWindowRateLimiter.Status(true, Duration.ofMinutes(42)));
+
+        mockMvc.perform(post("/short-urls").with(csrf()).param("originalUrl", "https://example.com"))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(content().string(containsString("Try again in 42 minutes.")));
+        verify(shortUrlService, never()).createShortUrl(any());
+    }
+
+    @Test
+    void theLimiterKnowsWhoIsAskingAndWhetherTheyAreAnAdmin() throws Exception {
+        given(shortUrlService.createShortUrl(any())).willReturn(new ShortUrlDto(
+                1L, "abc123", "https://example.com", false, null, null, 0L, Instant.now()));
+
+        mockMvc.perform(post("/short-urls").with(csrf())
+                .with(user(TestFixtures.principal(1L, "Admin User", Role.ROLE_ADMIN)))
+                .param("originalUrl", "https://example.com"));
+
+        verify(linkCreationLimiter).attempt(1L, true, "127.0.0.1");
     }
 
     @Test

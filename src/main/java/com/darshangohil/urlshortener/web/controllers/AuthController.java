@@ -2,6 +2,7 @@ package com.darshangohil.urlshortener.web.controllers;
 
 import com.darshangohil.urlshortener.domain.exception.EmailAlreadyExistsException;
 import com.darshangohil.urlshortener.domain.models.CreateUserCmd;
+import com.darshangohil.urlshortener.domain.services.PasswordPolicy;
 import com.darshangohil.urlshortener.domain.services.UserService;
 import com.darshangohil.urlshortener.web.dtos.RegisterForm;
 import jakarta.validation.Valid;
@@ -21,9 +22,11 @@ public class AuthController {
     private static final Logger log = LoggerFactory.getLogger(AuthController.class);
 
     private final UserService userService;
+    private final PasswordPolicy passwordPolicy;
 
-    public AuthController(UserService userService) {
+    public AuthController(UserService userService, PasswordPolicy passwordPolicy) {
         this.userService = userService;
+        this.passwordPolicy = passwordPolicy;
     }
 
     @GetMapping("/login")
@@ -51,6 +54,11 @@ public class AuthController {
                 && !form.passwordsMatch()) {
             bindingResult.rejectValue("confirmPassword", "password.mismatch",
                     "Passwords do not match");
+        }
+
+        if (!bindingResult.hasFieldErrors("password")) {
+            passwordPolicy.problems(form.password(), form.email(), form.name())
+                    .forEach(problem -> bindingResult.rejectValue("password", "password.policy", problem));
         }
 
         if (bindingResult.hasErrors()) {

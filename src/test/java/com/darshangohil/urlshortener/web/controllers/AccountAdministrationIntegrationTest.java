@@ -113,6 +113,18 @@ class AccountAdministrationIntegrationTest {
         mockMvc.perform(get("/admin/links").session(signIn(member))).andExpect(status().isOk());
     }
 
+    @Test
+    void repeatedWrongPasswordsLockTheAccountEvenAgainstTheRightOne() throws Exception {
+        User target = save(TestFixtures.user(null, "Acct Test Lockout", Role.ROLE_USER));
+        for (int i = 0; i < 5; i++) {
+            mockMvc.perform(formLogin("/login").user("email", target.getEmail()).password("password", "wrong-guess"))
+                    .andExpect(redirectedUrl("/login?error"));
+        }
+
+        mockMvc.perform(formLogin("/login").user("email", target.getEmail()).password("password", "pw-123456"))
+                .andExpect(redirectedUrl("/login?locked=15"));
+    }
+
     private MockHttpSession signIn(User user) throws Exception {
         return (MockHttpSession) mockMvc.perform(formLogin("/login")
                         .user("email", user.getEmail()).password("password", "pw-123456"))

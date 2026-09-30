@@ -1,6 +1,8 @@
 package com.darshangohil.urlshortener.web.controllers;
 
 import com.darshangohil.urlshortener.ApplicationProperties;
+import com.darshangohil.urlshortener.RateLimitProperties;
+import com.darshangohil.urlshortener.web.security.LoginThrottle;
 import com.darshangohil.urlshortener.config.MethodSecurityConfig;
 import com.darshangohil.urlshortener.config.SecurityConfig;
 import com.darshangohil.urlshortener.domain.models.AdminOverview;
@@ -50,8 +52,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(AdminController.class)
-@EnableConfigurationProperties(ApplicationProperties.class)
-@Import({SecurityConfig.class, MethodSecurityConfig.class, SecurityUtils.class})
+@EnableConfigurationProperties({ApplicationProperties.class, RateLimitProperties.class})
+@Import({SecurityConfig.class, MethodSecurityConfig.class, SecurityUtils.class, LoginThrottle.class})
 @TestPropertySource(properties = "app.baseUrl=http://localhost:8080")
 class AdminControllerWebTest {
 

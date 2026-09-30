@@ -3,6 +3,7 @@ package com.darshangohil.urlshortener.web.controllers;
 import com.darshangohil.urlshortener.ApplicationProperties;
 import com.darshangohil.urlshortener.domain.exception.InvalidUrlException;
 import com.darshangohil.urlshortener.domain.exception.ShortUrlNotFoundException;
+import com.darshangohil.urlshortener.domain.exception.UnsafeUrlException;
 import com.darshangohil.urlshortener.domain.models.CreateShortUrlCmd;
 import com.darshangohil.urlshortener.domain.models.PagedResult;
 import com.darshangohil.urlshortener.domain.models.SecurityUser;
@@ -11,12 +12,16 @@ import com.darshangohil.urlshortener.domain.models.ShortUrlFilter;
 import com.darshangohil.urlshortener.domain.services.ShortUrlService;
 import com.darshangohil.urlshortener.web.dtos.CreateShortUrlForm;
 import com.darshangohil.urlshortener.web.dtos.EditShortUrlForm;
+import com.darshangohil.urlshortener.web.security.LinkCreationLimiter;
 import com.darshangohil.urlshortener.web.utils.FilterLinks;
 import com.darshangohil.urlshortener.web.utils.SecurityUtils;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
@@ -38,12 +43,15 @@ public class HomeController {
     private final ShortUrlService shortUrlService;
     private final String baseUrl;
     private final SecurityUtils securityUtils;
+    private final LinkCreationLimiter linkCreationLimiter;
 
     public HomeController(ShortUrlService shortUrlService,
-                          ApplicationProperties properties, SecurityUtils securityUtils) {
+                          ApplicationProperties properties, SecurityUtils securityUtils,
+                          LinkCreationLimiter linkCreationLimiter) {
         this.shortUrlService = shortUrlService;
         this.baseUrl = properties.baseUrl();
         this.securityUtils = securityUtils;
+        this.linkCreationLimiter = linkCreationLimiter;
     }
 
     @GetMapping("/")
@@ -70,14 +78,26 @@ public class HomeController {
             @ModelAttribute("createShortUrlForm") @Valid CreateShortUrlForm form,
                           BindingResult bindingResult,
                           RedirectAttributes redirectAttributes,
+                          HttpServletRequest request,
+                          HttpServletResponse response,
                           Model model){
         if(bindingResult.hasErrors()){
             addHomeAttributes(model, 1);
             return "index";
         }
 
+        Long userId = securityUtils.getCurrentUserId();
+        var limit = linkCreationLimiter.attempt(userId, request.isUserInRole("ADMIN"), request.getRemoteAddr());
+        if (limit.limited()) {
+            response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
+            bindingResult.rejectValue("originalUrl", "rate.limited",
+                    "You've created a lot of links recently. Try again in " + limit.retryAfterMinutes()
+                            + (limit.retryAfterMinutes() == 1 ? " minute." : " minutes."));
+            addHomeAttributes(model, 1);
+            return "index";
+        }
+
         try{
-            Long userId = securityUtils.getCurrentUserId();
             CreateShortUrlCmd cmd = new CreateShortUrlCmd(
                     form.originalUrl(),
                     form.isPrivate(),
@@ -92,6 +112,11 @@ public class HomeController {
             log.info("Rejected unreachable URL {}", form.originalUrl());
             bindingResult.rejectValue("originalUrl", "url.unreachable",
                     "We couldn't reach that URL. Check it and try again.");
+            addHomeAttributes(model, 1);
+            return "index";
+        }catch (UnsafeUrlException e){
+            log.info("Refused unsafe URL {}: {}", form.originalUrl(), e.getMessage());
+            bindingResult.rejectValue("originalUrl", "url.unsafe", e.getMessage());
             addHomeAttributes(model, 1);
             return "index";
         }catch (DataAccessException e){
