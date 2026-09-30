@@ -49,7 +49,7 @@ class ShortUrlServiceSecurityTest {
 
     @Configuration
     @Import({MethodSecurityConfig.class, ShortUrlService.class, ShortUrlPermissions.class,
-            EntityMapper.class})
+            EntityMapper.class, AdminOverviewService.class})
     static class Config {
         @Bean
         ApplicationProperties applicationProperties() {
@@ -58,6 +58,7 @@ class ShortUrlServiceSecurityTest {
     }
 
     @Autowired ShortUrlService service;
+    @Autowired AdminOverviewService overviewService;
     @Autowired RoleHierarchy roleHierarchy;
     @MockitoBean ShortUrlRepository shortUrlRepository;
     @MockitoBean UserRepository userRepository;
@@ -184,6 +185,15 @@ class ShortUrlServiceSecurityTest {
         givenLink(TestFixtures.shortUrl(1L, "guest1", false, null));
 
         assertThatNoException().isThrownBy(() -> service.updateShortUrl(1L, KEEP_ALL));
+    }
+
+    // --- overview --------------------------------------------------------------------
+
+    @Test
+    void onlyAnAdminCanSeeTheOverview() {
+        signInAs(owner);
+
+        assertThatThrownBy(() -> overviewService.getOverview()).isInstanceOf(AccessDeniedException.class);
     }
 
     // --- disabling -------------------------------------------------------------------

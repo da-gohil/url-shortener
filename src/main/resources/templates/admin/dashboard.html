@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}"
+>
+
+<head>
+    <title>Admin Dashboard</title>
+</head>
+
+<body>
+<div layout:fragment="content" th:with="o=${overview}">
+    <h1 class="mt-4 h3">Admin Dashboard</h1>
+    <ul th:replace="~{fragments/admin-nav :: adminNav(${adminTab})}"></ul>
+
+    <!-- stat tiles: label, then value -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-lg">
+            <a class="card h-100 text-decoration-none text-reset" th:href="@{/admin/users}">
+                <div class="card-body">
+                    <div class="text-muted small">Users</div>
+                    <div class="fs-3 fw-semibold" th:text="${#numbers.formatInteger(o.totalUsers, 1, 'COMMA')}">0</div>
+                </div>
+            </a>
+        </div>
+        <div class="col-6 col-lg">
+            <a class="card h-100 text-decoration-none text-reset" th:href="@{/admin/links}">
+                <div class="card-body">
+                    <div class="text-muted small">Links</div>
+                    <div class="fs-3 fw-semibold" th:text="${#numbers.formatInteger(o.links.totalLinks, 1, 'COMMA')}">0</div>
+                </div>
+            </a>
+        </div>
+        <div class="col-6 col-lg">
+            <div class="card h-100"><div class="card-body">
+                <div class="text-muted small">Total clicks</div>
+                <div class="fs-3 fw-semibold" th:text="${#numbers.formatInteger(o.links.totalClicks, 1, 'COMMA')}">0</div>
+            </div></div>
+        </div>
+        <div class="col-6 col-lg">
+            <a class="card h-100 text-decoration-none text-reset" th:href="@{/admin/links(status='active')}">
+                <div class="card-body">
+                    <div class="text-muted small">Active links</div>
+                    <div class="fs-3 fw-semibold" th:text="${#numbers.formatInteger(o.links.activeLinks, 1, 'COMMA')}">0</div>
+                </div>
+            </a>
+        </div>
+        <div class="col-6 col-lg">
+            <a class="card h-100 text-decoration-none text-reset" th:href="@{/admin/links(status='disabled')}">
+                <div class="card-body">
+                    <div class="text-muted small">Disabled links</div>
+                    <div class="fs-3 fw-semibold" th:text="${#numbers.formatInteger(o.links.disabledLinks, 1, 'COMMA')}">0</div>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-7">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h2 class="h6 mb-0">Links created per day</h2>
+                    <p class="text-muted small mb-3"
+                       th:text="'Last ' + ${#lists.size(o.linksPerDay)} + ' days · ' + ${o.linksInWindow()} + (${o.linksInWindow()} == 1 ? ' link' : ' links')"></p>
+
+                    <!-- one series, so no legend: the heading names it. Each column is a
+                         focusable hit target the full height of the plot, with a tooltip. -->
+                    <div class="day-chart" role="img"
+                         th:attr="aria-label=${'Links created per day, last ' + #lists.size(o.linksPerDay) + ' days. Full numbers in the table below.'}">
+                        <div class="day-chart__plot">
+                            <div class="day-chart__col" tabindex="0" th:each="d : ${o.linksPerDay}"
+                                 th:with="label=${#temporals.format(d.day, 'EEE d MMM')} + ': ' + ${d.count} + (${d.count} == 1 ? ' link' : ' links')"
+                                 th:attr="aria-label=${label}">
+                                <span class="day-chart__bar"
+                                      th:style="'height:' + ${d.count * 100 / o.busiestDayCount()} + '%'">
+                                    <!-- only the peak is labelled; the tooltip and table carry the rest -->
+                                    <span class="day-chart__peak"
+                                          th:if="${d.count > 0 and d.day == o.peakDay()}" th:text="${d.count}">0</span>
+                                </span>
+                                <span class="day-chart__tip" role="tooltip" th:text="${label}"></span>
+                            </div>
+                        </div>
+                        <div class="day-chart__axis text-muted small">
+                            <span th:text="${#temporals.format(o.linksPerDay[0].day, 'd MMM')}"></span>
+                            <span>Today</span>
+                        </div>
+                    </div>
+
+                    <details class="mt-3 small">
+                        <summary class="text-muted">Show as a table</summary>
+                        <table class="table table-sm mt-2 mb-0">
+                            <thead><tr><th>Day</th><th class="text-end">Links created</th></tr></thead>
+                            <tbody>
+                            <tr th:each="d : ${o.linksPerDay}">
+                                <td th:text="${#temporals.format(d.day, 'EEE d MMM yyyy')}"></td>
+                                <td class="text-end" th:text="${d.count}"></td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </details>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-5">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h2 class="h6">Most clicked links</h2>
+                    <p th:if="${o.mostClicked.isEmpty()}" class="text-muted small">No links yet.</p>
+                    <ol th:unless="${o.mostClicked.isEmpty()}" class="list-unstyled mb-0">
+                        <li th:each="url : ${o.mostClicked}" class="d-flex align-items-baseline py-2 border-bottom">
+                            <div class="me-2 text-truncate">
+                                <a th:href="@{/s/{key}(key=${url.shortKey})}" target="_blank"
+                                   th:text="${url.shortKey}"></a>
+                                <span th:if="${url.disabled}" class="badge bg-danger ms-1">Disabled</span>
+                                <div class="text-muted small text-truncate"
+                                     th:text="${#strings.abbreviate(url.originalUrl, 60)}"></div>
+                            </div>
+                            <span class="ms-auto fw-semibold text-nowrap"
+                                  th:text="${#numbers.formatInteger(url.clickCount, 1, 'COMMA')} + ' clicks'"></span>
+                        </li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

@@ -9,6 +9,7 @@ import com.darshangohil.urlshortener.domain.models.ShortUrlFilter;
 import com.darshangohil.urlshortener.domain.models.Role;
 import com.darshangohil.urlshortener.domain.models.UserDto;
 import com.darshangohil.urlshortener.domain.models.UserSummary;
+import com.darshangohil.urlshortener.domain.services.AdminOverviewService;
 import com.darshangohil.urlshortener.domain.services.ShortUrlService;
 import com.darshangohil.urlshortener.domain.services.UserService;
 import com.darshangohil.urlshortener.web.utils.FilterLinks;
@@ -37,22 +38,29 @@ public class AdminController {
 
     private final ShortUrlService shortUrlService;
     private final UserService userService;
+    private final AdminOverviewService adminOverviewService;
     private final SecurityUtils securityUtils;
     private final String baseUrl;
 
     public AdminController(ShortUrlService shortUrlService,
                            UserService userService,
+                           AdminOverviewService adminOverviewService,
                            SecurityUtils securityUtils,
                            ApplicationProperties properties) {
         this.shortUrlService = shortUrlService;
         this.userService = userService;
+        this.adminOverviewService = adminOverviewService;
         this.securityUtils = securityUtils;
         this.baseUrl = properties.baseUrl();
     }
 
     @GetMapping("/dashboard")
-    public String dashboard() {
-        return "redirect:/admin/links";
+    public String dashboard(Model model) {
+        model.addAttribute("overview", adminOverviewService.getOverview());
+        model.addAttribute("activeNav", "admin");
+        model.addAttribute("adminTab", "overview");
+        model.addAttribute("baseUrl", baseUrl);
+        return "admin/dashboard";
     }
 
     @GetMapping("/links")

@@ -69,6 +69,21 @@ class ShortUrlRepositoryIntegrationTest {
     }
 
     @Test
+    void siteStatsAndRecentCreationTimesIncludeNewLinks() {
+        Instant now = Instant.now();
+        UserUrlStats before = shortUrlRepository.getSiteStats(now);
+        save("itSite1", false, null, null, 4);
+        disable(save("itSite2", false, null, null, 0));
+
+        UserUrlStats after = shortUrlRepository.getSiteStats(now);
+
+        assertThat(after.totalLinks() - before.totalLinks()).isEqualTo(2);
+        assertThat(after.totalClicks() - before.totalClicks()).isEqualTo(4);
+        assertThat(after.disabledLinks() - before.disabledLinks()).isEqualTo(1);
+        assertThat(shortUrlRepository.findCreatedAtSince(now.minus(1, ChronoUnit.MINUTES))).hasSizeGreaterThanOrEqualTo(2);
+    }
+
+    @Test
     void aUserWithNoLinksHasZeroStatsRatherThanNulls() {
         User owner = saveUser("Stats Test Empty");
 

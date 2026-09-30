@@ -3,7 +3,9 @@ package com.darshangohil.urlshortener.web.controllers;
 import com.darshangohil.urlshortener.ApplicationProperties;
 import com.darshangohil.urlshortener.config.MethodSecurityConfig;
 import com.darshangohil.urlshortener.config.SecurityConfig;
+import com.darshangohil.urlshortener.domain.models.AdminOverview;
 import com.darshangohil.urlshortener.domain.models.OwnerFilter;
+import com.darshangohil.urlshortener.domain.models.UserUrlStats;
 import com.darshangohil.urlshortener.domain.models.PagedResult;
 import com.darshangohil.urlshortener.domain.models.Role;
 import com.darshangohil.urlshortener.domain.models.ShortUrlDto;
@@ -11,6 +13,7 @@ import com.darshangohil.urlshortener.domain.models.ShortUrlFilter;
 import com.darshangohil.urlshortener.domain.models.UserDto;
 import com.darshangohil.urlshortener.domain.models.UserSummary;
 import com.darshangohil.urlshortener.domain.exception.SelfModificationException;
+import com.darshangohil.urlshortener.domain.services.AdminOverviewService;
 import com.darshangohil.urlshortener.domain.services.ShortUrlService;
 import com.darshangohil.urlshortener.domain.services.UserService;
 import com.darshangohil.urlshortener.domain.models.SecurityUser;
@@ -55,6 +58,7 @@ class AdminControllerWebTest {
     @Autowired MockMvc mockMvc;
     @MockitoBean ShortUrlService shortUrlService;
     @MockitoBean UserService userService;
+    @MockitoBean AdminOverviewService adminOverviewService;
 
     // --- access ----------------------------------------------------------------------
 
@@ -75,6 +79,37 @@ class AdminControllerWebTest {
     void ordinaryUserCannotReachTheAdminDelete() throws Exception {
         mockMvc.perform(post("/admin/delete-urls").with(csrf()).with(user(JOHN)).param("ids", "4"))
                 .andExpect(status().isForbidden());
+    }
+
+    // --- overview --------------------------------------------------------------------
+
+    @Test
+    void theOverviewShowsTotalsTheChartAndTopLinks() throws Exception {
+        var days = new java.util.ArrayList<AdminOverview.DailyCount>();
+        for (int i = 0; i < 14; i++) {
+            days.add(new AdminOverview.DailyCount(java.time.LocalDate.of(2026, 9, 17).plusDays(i), i == 5 ? 8 : 1));
+        }
+        given(adminOverviewService.getOverview()).willReturn(new AdminOverview(1234,
+                new UserUrlStats(50L, 12345L, 40L, 3L), days,
+                List.of(TestFixtures.dto(1L, "aB3xZ9", false, null))));
+
+        String html = mockMvc.perform(get("/admin/dashboard").with(user(ADMIN)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(html)
+                .contains("<title>Admin Dashboard</title>")
+                .contains(">1,234<")                  // users, comma-grouped
+                .contains(">12,345<")                 // total clicks
+                .contains("Last 14 days · 21 links")
+                // one column per day; the busiest (8) is full height and the only labelled bar
+                .containsPattern("(?s)(class=\"day-chart__col\".*?){14}")
+                .contains("height:100%")
+                .contains("height:12%")
+                .contains("class=\"day-chart__peak\">8</span>")
+                .contains("Tue 22 Sep: 8 links")
+                .contains("Show as a table")
+                .contains(">aB3xZ9</a>");
     }
 
     // --- links tab -------------------------------------------------------------------

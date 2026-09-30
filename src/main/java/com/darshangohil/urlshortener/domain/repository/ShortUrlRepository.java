@@ -52,6 +52,23 @@ public interface ShortUrlRepository extends JpaRepository<ShortUrl, Long>,
 
     List<ShortUrl> findAllByIdIn(List<Long> ids);
 
+    /** The same numbers as {@link #getUserStats}, across every link on the site. */
+    @Query("""
+            SELECT new com.darshangohil.urlshortener.domain.models.UserUrlStats(
+                COUNT(su),
+                COALESCE(SUM(su.clickCount), 0L),
+                COALESCE(SUM(CASE WHEN su.disabled = false
+                                   AND (su.expiresAt IS NULL OR su.expiresAt > :now)
+                                  THEN 1L ELSE 0L END), 0L),
+                COALESCE(SUM(CASE WHEN su.disabled = true THEN 1L ELSE 0L END), 0L))
+            FROM ShortUrl su
+            """)
+    UserUrlStats getSiteStats(Instant now);
+
+    /** Creation times since {@code since}, for the per-day chart; bucketed by the caller. */
+    @Query("SELECT su.createdAt FROM ShortUrl su WHERE su.createdAt >= :since")
+    List<Instant> findCreatedAtSince(Instant since);
+
     /** One aggregate query rather than loading the user's links to count them. */
     @Query("""
             SELECT new com.darshangohil.urlshortener.domain.models.UserUrlStats(
