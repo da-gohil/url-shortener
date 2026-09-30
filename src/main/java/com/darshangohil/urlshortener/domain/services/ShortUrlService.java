@@ -3,7 +3,6 @@ package com.darshangohil.urlshortener.domain.services;
 import com.darshangohil.urlshortener.ApplicationProperties;
 import com.darshangohil.urlshortener.domain.entities.ShortUrl;
 import com.darshangohil.urlshortener.domain.exception.InvalidUrlException;
-import com.darshangohil.urlshortener.domain.exception.ShortUrlAccessDeniedException;
 import com.darshangohil.urlshortener.domain.models.CreateShortUrlCmd;
 import com.darshangohil.urlshortener.domain.models.PagedResult;
 import com.darshangohil.urlshortener.domain.models.ShortUrlDto;
@@ -13,6 +12,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,15 +51,18 @@ public class ShortUrlService {
     }
 
     public PagedResult<ShortUrlDto> findAllPublicShortUrls(int pageNo) {
-        Page<ShortUrl> page = shortUrlRepository.findPublicShortUrls(pageRequest(pageNo));
+        Page<ShortUrl> page = shortUrlRepository.findActivePublicShortUrls(Instant.now(), pageRequest(pageNo));
         return PagedResult.from(page, entityMapper::toShortUrlDto);
     }
 
+    /** A user may list their own URLs; an admin may list anyone's. */
+    @PreAuthorize("hasRole('ADMIN') or (hasRole('USER') and #userId == principal.id)")
     public PagedResult<ShortUrlDto> findUrlsByUser(Long userId, int pageNo) {
         Page<ShortUrl> page = shortUrlRepository.findByCreatedById(userId, pageRequest(pageNo));
         return PagedResult.from(page, entityMapper::toShortUrlDto);
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     public PagedResult<ShortUrlDto> findAllShortUrls(int pageNo) {
         Page<ShortUrl> page = shortUrlRepository.findAllShortUrls(pageRequest(pageNo));
         return PagedResult.from(page, entityMapper::toShortUrlDto);
@@ -128,8 +131,7 @@ public class ShortUrlService {
                         || shortUrl.getExpiresAt().isAfter(Instant.now()))
                 .filter(shortUrl -> isVisibleTo(shortUrl, userId))
                 .map(shortUrl -> {
-                    shortUrl.setClickCount(shortUrl.getClickCount() + 1);
-                    shortUrlRepository.save(shortUrl);
+                    shortUrlRepository.incrementClickCount(shortUrl.getId());
                     return shortUrl.getOriginalUrl();
                 });
     }
@@ -149,26 +151,17 @@ public class ShortUrlService {
     }
 
     /**
-     * Deletes the given URLs. A non-admin may only delete their own; if any id falls
-     * outside that, nothing is deleted and {@link ShortUrlAccessDeniedException} is raised.
+     * Deletes the given URLs. An admin may delete any; a user only their own. If any id
+     * falls outside that, nothing is deleted and Spring Security raises
+     * {@code AccessDeniedException}, which becomes the 403 page.
      */
+    @PreAuthorize("hasRole('ADMIN') or @shortUrlPermissions.ownsAll(#ids, authentication)")
     @Transactional
-    public void deleteShortUrls(List<Long> ids, Long userId, boolean isAdmin) {
+    public void deleteShortUrls(List<Long> ids) {
         if (ids == null || ids.isEmpty()) {
             return;
         }
-        List<ShortUrl> shortUrls = shortUrlRepository.findAllByIdIn(ids);
-
-        if (!isAdmin) {
-            boolean ownsAll = shortUrls.stream().allMatch(shortUrl ->
-                    shortUrl.getCreatedBy() != null
-                            && Objects.equals(shortUrl.getCreatedBy().getId(), userId));
-            if (!ownsAll) {
-                throw new ShortUrlAccessDeniedException(
-                        "User " + userId + " cannot delete short URLs they do not own");
-            }
-        }
-        shortUrlRepository.deleteAll(shortUrls);
+        shortUrlRepository.deleteAll(shortUrlRepository.findAllByIdIn(ids));
     }
 
     public static String generateRandomShortKey() {

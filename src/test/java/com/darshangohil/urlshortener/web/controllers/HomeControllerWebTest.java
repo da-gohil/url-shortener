@@ -1,6 +1,7 @@
 package com.darshangohil.urlshortener.web.controllers;
 
 import com.darshangohil.urlshortener.ApplicationProperties;
+import com.darshangohil.urlshortener.config.MethodSecurityConfig;
 import com.darshangohil.urlshortener.config.SecurityConfig;
 import com.darshangohil.urlshortener.domain.exception.InvalidUrlException;
 import com.darshangohil.urlshortener.domain.models.CreateShortUrlCmd;
@@ -44,7 +45,7 @@ import static org.hamcrest.Matchers.not;
 
 @WebMvcTest(HomeController.class)
 @EnableConfigurationProperties(ApplicationProperties.class)
-@Import({SecurityConfig.class, SecurityUtils.class})
+@Import({SecurityConfig.class, MethodSecurityConfig.class, SecurityUtils.class})
 @TestPropertySource(properties = "app.baseUrl=http://localhost:8080")
 class HomeControllerWebTest {
 
@@ -368,13 +369,24 @@ class HomeControllerWebTest {
     }
 
     @Test
-    void deletingPassesOwnershipContextToTheService() throws Exception {
+    void anAdminCanUseMyUrlsThroughTheRoleHierarchy() throws Exception {
+        // /my-urls requires ROLE_USER; an admin only has ROLE_ADMIN, which implies it
+        given(shortUrlService.findUrlsByUser(eq(1L), anyInt())).willReturn(TestFixtures.onePage(List.of()));
+
+        mockMvc.perform(get("/my-urls")
+                        .with(user(TestFixtures.principal(1L, "Admin User", Role.ROLE_ADMIN))))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("<title>My URLs</title>")));
+    }
+
+    @Test
+    void deletingPassesTheIdsToTheService() throws Exception {
         mockMvc.perform(post("/delete-urls").with(csrf())
                         .with(user(TestFixtures.principal(2L, "John Doe", Role.ROLE_USER)))
                         .param("ids", "1", "2"))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/my-urls"));
-        verify(shortUrlService).deleteShortUrls(List.of(1L, 2L), 2L, false);
+        verify(shortUrlService).deleteShortUrls(List.of(1L, 2L));
     }
 
     @Test

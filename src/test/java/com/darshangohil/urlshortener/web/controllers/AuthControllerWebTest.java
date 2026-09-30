@@ -1,5 +1,6 @@
 package com.darshangohil.urlshortener.web.controllers;
 
+import com.darshangohil.urlshortener.config.MethodSecurityConfig;
 import com.darshangohil.urlshortener.config.SecurityConfig;
 import com.darshangohil.urlshortener.domain.exception.EmailAlreadyExistsException;
 import com.darshangohil.urlshortener.domain.models.CreateUserCmd;
@@ -26,7 +27,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(AuthController.class)
-@Import({SecurityConfig.class, SecurityUtils.class})
+@Import({SecurityConfig.class, MethodSecurityConfig.class, SecurityUtils.class})
 class AuthControllerWebTest {
 
     @Autowired MockMvc mockMvc;

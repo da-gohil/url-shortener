@@ -4,7 +4,6 @@ import com.darshangohil.urlshortener.ApplicationProperties;
 import com.darshangohil.urlshortener.domain.models.PagedResult;
 import com.darshangohil.urlshortener.domain.models.ShortUrlDto;
 import com.darshangohil.urlshortener.domain.services.ShortUrlService;
-import com.darshangohil.urlshortener.web.utils.SecurityUtils;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,20 +14,20 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.util.List;
 
-/** Everything here is behind {@code hasAuthority(ROLE_ADMIN)} in SecurityConfig. */
+/**
+ * Everything here is behind {@code hasRole("ADMIN")} in SecurityConfig, and the service
+ * methods it calls re-check that with {@code @PreAuthorize}.
+ */
 @Controller
 @RequestMapping("/admin")
 public class AdminController {
 
     private final ShortUrlService shortUrlService;
-    private final SecurityUtils securityUtils;
     private final String baseUrl;
 
     public AdminController(ShortUrlService shortUrlService,
-                           SecurityUtils securityUtils,
                            ApplicationProperties properties) {
         this.shortUrlService = shortUrlService;
-        this.securityUtils = securityUtils;
         this.baseUrl = properties.baseUrl();
     }
 
@@ -56,7 +55,7 @@ public class AdminController {
             redirectAttributes.addFlashAttribute("errorMessage", "No URLs selected for deletion");
             return "redirect:/admin/dashboard";
         }
-        shortUrlService.deleteShortUrls(ids, securityUtils.getCurrentUserId(), securityUtils.isCurrentUserAdmin());
+        shortUrlService.deleteShortUrls(ids);
         redirectAttributes.addFlashAttribute("successMessage",
                 ids.size() == 1 ? "Short URL deleted" : ids.size() + " short URLs deleted");
         return "redirect:/admin/dashboard";

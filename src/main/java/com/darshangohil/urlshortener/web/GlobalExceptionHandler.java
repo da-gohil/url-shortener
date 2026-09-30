@@ -1,6 +1,5 @@
 package com.darshangohil.urlshortener.web;
 
-import com.darshangohil.urlshortener.domain.exception.ShortUrlAccessDeniedException;
 import com.darshangohil.urlshortener.domain.exception.ShortUrlNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
@@ -24,12 +23,6 @@ public class GlobalExceptionHandler {
     ModelAndView handleShortUrlNotFoundException(ShortUrlNotFoundException ex){
         log.warn("Short URL not found: {}", ex.getMessage());
         return new ModelAndView("error/404", HttpStatus.NOT_FOUND);
-    }
-
-    @ExceptionHandler(ShortUrlAccessDeniedException.class)
-    ModelAndView handleShortUrlAccessDenied(ShortUrlAccessDeniedException ex){
-        log.warn("Refused short URL deletion: {}", ex.getMessage());
-        return new ModelAndView("error/403", HttpStatus.FORBIDDEN);
     }
 
     /**

@@ -1,9 +1,7 @@
 package com.darshangohil.urlshortener.web.utils;
 
-import com.darshangohil.urlshortener.domain.models.Role;
 import com.darshangohil.urlshortener.domain.models.SecurityUser;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
@@ -32,13 +30,5 @@ public class SecurityUtils {
     /** The logged-in user's id, or {@code null} for an anonymous visitor. */
     public Long getCurrentUserId() {
         return getCurrentUser().map(SecurityUser::getId).orElse(null);
-    }
-
-    public boolean isCurrentUserAdmin() {
-        return getCurrentUser()
-                .map(user -> user.getAuthorities().stream()
-                        .map(GrantedAuthority::getAuthority)
-                        .anyMatch(Role.ROLE_ADMIN.name()::equals))
-                .orElse(false);
     }
 }
