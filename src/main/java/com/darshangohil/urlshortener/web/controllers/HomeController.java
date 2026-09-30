@@ -11,6 +11,7 @@ import com.darshangohil.urlshortener.domain.models.ShortUrlFilter;
 import com.darshangohil.urlshortener.domain.services.ShortUrlService;
 import com.darshangohil.urlshortener.web.dtos.CreateShortUrlForm;
 import com.darshangohil.urlshortener.web.dtos.EditShortUrlForm;
+import com.darshangohil.urlshortener.web.utils.FilterLinks;
 import com.darshangohil.urlshortener.web.utils.SecurityUtils;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -25,10 +26,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
-import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.List;
-import java.util.Locale;
+import java.util.Map;
 
 @Controller
 public class HomeController {
@@ -143,37 +143,23 @@ public class HomeController {
         return "my-urls";
     }
 
-    /** /my-urls carrying only the filter values that differ from the defaults. */
     private static String myUrlsLink(ShortUrlFilter filter, Integer page) {
-        UriComponentsBuilder link = UriComponentsBuilder.fromPath("/my-urls");
-        if (filter.query() != null) {
-            link.queryParam("q", filter.query());
-        }
-        if (filter.visibility() != ShortUrlFilter.Visibility.ALL) {
-            link.queryParam("visibility", filter.visibility().name().toLowerCase(Locale.ROOT));
-        }
-        if (filter.status() != ShortUrlFilter.Status.ALL) {
-            link.queryParam("status", filter.status().name().toLowerCase(Locale.ROOT));
-        }
-        if (filter.sort() != ShortUrlFilter.SortOrder.NEWEST) {
-            link.queryParam("sort", filter.sort().name().toLowerCase(Locale.ROOT));
-        }
-        if (page != null) {
-            link.queryParam("page", page);
-        }
-        return link.encode().toUriString();
+        return FilterLinks.build("/my-urls", filter, Map.of(), page);
     }
 
     @GetMapping("/my-urls/{id}/edit")
-    public String editShortUrlForm(@PathVariable Long id, Model model) {
+    public String editShortUrlForm(@PathVariable Long id,
+                                   @RequestParam(required = false) String from,
+                                   Model model) {
         ShortUrlDto shortUrl = shortUrlService.getShortUrl(id);
         model.addAttribute("editShortUrlForm",
                 new EditShortUrlForm(shortUrl.isPrivate(), "keep", null));
-        return showEditForm(shortUrl, model);
+        return showEditForm(shortUrl, isFromAdmin(from), model);
     }
 
     @PostMapping("/my-urls/{id}/edit")
     public String editShortUrl(@PathVariable Long id,
+                               @RequestParam(required = false) String from,
                                @ModelAttribute("editShortUrlForm") @Valid EditShortUrlForm form,
                                BindingResult bindingResult,
                                RedirectAttributes redirectAttributes,
@@ -183,19 +169,28 @@ public class HomeController {
                     "Enter how many days until the link expires");
         }
         if (bindingResult.hasErrors()) {
-            return showEditForm(shortUrlService.getShortUrl(id), model);
+            return showEditForm(shortUrlService.getShortUrl(id), isFromAdmin(from), model);
         }
         ShortUrlDto updated = shortUrlService.updateShortUrl(id, form.toCmd());
         redirectAttributes.addFlashAttribute("successMessage",
                 "Updated " + baseUrl + "/s/" + updated.shortKey());
-        return "redirect:/my-urls";
+        return "redirect:" + (isFromAdmin(from) ? "/admin/links" : "/my-urls");
     }
 
-    private String showEditForm(ShortUrlDto shortUrl, Model model) {
+    private String showEditForm(ShortUrlDto shortUrl, boolean fromAdmin, Model model) {
         model.addAttribute("shortUrl", shortUrl);
-        model.addAttribute("activeNav", "my-urls");
+        model.addAttribute("fromAdmin", fromAdmin);
+        model.addAttribute("activeNav", fromAdmin ? "admin" : "my-urls");
         model.addAttribute("baseUrl", baseUrl);
         return "edit-url";
+    }
+
+    /**
+     * Where the edit page returns to. Only the one known value is honoured, so the
+     * parameter can never become an open redirect.
+     */
+    private static boolean isFromAdmin(String from) {
+        return "admin".equals(from);
     }
 
     @PostMapping("/delete-urls")

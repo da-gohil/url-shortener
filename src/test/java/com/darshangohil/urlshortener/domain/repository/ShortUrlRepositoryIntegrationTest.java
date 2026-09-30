@@ -2,6 +2,7 @@ package com.darshangohil.urlshortener.domain.repository;
 
 import com.darshangohil.urlshortener.domain.entities.ShortUrl;
 import com.darshangohil.urlshortener.domain.entities.User;
+import com.darshangohil.urlshortener.domain.models.OwnerFilter;
 import com.darshangohil.urlshortener.domain.models.Role;
 import com.darshangohil.urlshortener.domain.models.ShortUrlFilter;
 import com.darshangohil.urlshortener.domain.models.UserUrlStats;
@@ -54,13 +55,32 @@ class ShortUrlRepositoryIntegrationTest {
         save("itSt02", true, now.plus(1, ChronoUnit.DAYS), owner, 5);
         save("itSt03", false, now.minus(1, ChronoUnit.DAYS), owner, 2);
         save("itSt04", false, null, other, 100);
+        disable(save("itSt05", false, null, owner, 1));
+        // disabled wins over expired: counted once, as disabled
+        disable(save("itSt06", false, now.minus(1, ChronoUnit.DAYS), owner, 0));
 
         UserUrlStats stats = shortUrlRepository.getUserStats(owner.getId(), now);
 
-        assertThat(stats.totalLinks()).isEqualTo(3);
-        assertThat(stats.totalClicks()).isEqualTo(17);
+        assertThat(stats.totalLinks()).isEqualTo(5);
+        assertThat(stats.totalClicks()).isEqualTo(18);
         assertThat(stats.activeLinks()).isEqualTo(2);
+        assertThat(stats.disabledLinks()).isEqualTo(2);
         assertThat(stats.expiredLinks()).isEqualTo(1);
+    }
+
+    @Test
+    void siteStatsAndRecentCreationTimesIncludeNewLinks() {
+        Instant now = Instant.now();
+        UserUrlStats before = shortUrlRepository.getSiteStats(now);
+        save("itSite1", false, null, null, 4);
+        disable(save("itSite2", false, null, null, 0));
+
+        UserUrlStats after = shortUrlRepository.getSiteStats(now);
+
+        assertThat(after.totalLinks() - before.totalLinks()).isEqualTo(2);
+        assertThat(after.totalClicks() - before.totalClicks()).isEqualTo(4);
+        assertThat(after.disabledLinks() - before.disabledLinks()).isEqualTo(1);
+        assertThat(shortUrlRepository.findCreatedAtSince(now.minus(1, ChronoUnit.MINUTES))).hasSizeGreaterThanOrEqualTo(2);
     }
 
     @Test
@@ -69,7 +89,7 @@ class ShortUrlRepositoryIntegrationTest {
 
         UserUrlStats stats = shortUrlRepository.getUserStats(owner.getId(), Instant.now());
 
-        assertThat(stats).isEqualTo(new UserUrlStats(0L, 0L, 0L));
+        assertThat(stats).isEqualTo(new UserUrlStats(0L, 0L, 0L, 0L));
     }
 
     // --- My URLs filters ------------------------------------------------------------
@@ -82,6 +102,17 @@ class ShortUrlRepositoryIntegrationTest {
         save("itF002", false, null, other, 0);
 
         assertThat(filtered(owner, ShortUrlFilter.NONE)).containsExactly("itF001");
+    }
+
+    @Test
+    void theOwnerFilterPicksOneUserOrOnlyGuests() {
+        User owner = saveUser("Filter Test Admin Owner");
+        save("itO001", false, null, owner, 0);
+        save("itO002", false, null);   // a guest link
+
+        assertThat(byOwner(OwnerFilter.user(owner.getId()))).containsExactly("itO001");
+        assertThat(byOwner(OwnerFilter.GUESTS)).contains("itO002").doesNotContain("itO001");
+        assertThat(byOwner(OwnerFilter.ANYONE)).contains("itO001", "itO002");
     }
 
     @Test
@@ -112,6 +143,7 @@ class ShortUrlRepositoryIntegrationTest {
         save("itF301", false, null, owner, 0);
         save("itF302", true, now.plus(1, ChronoUnit.DAYS), owner, 0);
         save("itF303", false, now.minus(1, ChronoUnit.DAYS), owner, 0);
+        disable(save("itF304", false, null, owner, 0));
 
         assertThat(filtered(owner, ShortUrlFilter.parse(null, "private", null, null)))
                 .containsExactly("itF302");
@@ -119,6 +151,8 @@ class ShortUrlRepositoryIntegrationTest {
                 .containsExactlyInAnyOrder("itF301", "itF302");
         assertThat(filtered(owner, ShortUrlFilter.parse(null, null, "expired", null)))
                 .containsExactly("itF303");
+        assertThat(filtered(owner, ShortUrlFilter.parse(null, null, "disabled", null)))
+                .containsExactly("itF304");
         assertThat(filtered(owner, ShortUrlFilter.parse(null, "public", "active", null)))
                 .containsExactly("itF301");
     }
@@ -149,13 +183,14 @@ class ShortUrlRepositoryIntegrationTest {
         save("itAct2", false, now.plus(1, ChronoUnit.DAYS));
         save("itExp1", false, now.minus(1, ChronoUnit.DAYS));
         save("itPrv1", true, null);
+        disable(save("itDis1", false, null));
 
         List<String> keys = shortUrlRepository
                 .findActivePublicShortUrls(now, PageRequest.of(0, 1000))
                 .map(ShortUrl::getShortKey)
                 .getContent();
 
-        assertThat(keys).contains("itAct1", "itAct2").doesNotContain("itExp1", "itPrv1");
+        assertThat(keys).contains("itAct1", "itAct2").doesNotContain("itExp1", "itPrv1", "itDis1");
     }
 
     @Test
@@ -228,6 +263,26 @@ class ShortUrlRepositoryIntegrationTest {
         var spec = ShortUrlSpecifications.ownedBy(owner.getId())
                 .and(ShortUrlSpecifications.matching(filter, Instant.now()));
         return shortUrlRepository.findAll(spec, PageRequest.of(0, 50, filter.sort().toSort()))
+                .map(ShortUrl::getShortKey)
+                .getContent();
+    }
+
+    private void disable(ShortUrl shortUrl) {
+        shortUrl.setDisabled(true);
+        shortUrlRepository.save(shortUrl);
+    }
+
+    @Test
+    void aDisabledLinkNoLongerRedirectsOrCountsClicks() {
+        ShortUrl shortUrl = save("itDis2", false, null);
+        disable(shortUrl);
+
+        assertThat(shortUrlService.accessOriginalUrl("itDis2", null)).isEmpty();
+        assertThat(clickCount(shortUrl)).isZero();
+    }
+
+    private List<String> byOwner(OwnerFilter owner) {
+        return shortUrlRepository.findAll(ShortUrlSpecifications.ownedBy(owner), PageRequest.of(0, 1000))
                 .map(ShortUrl::getShortKey)
                 .getContent();
     }

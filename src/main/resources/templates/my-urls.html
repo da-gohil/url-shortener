@@ -40,44 +40,10 @@
         </div>
     </div>
 
-    <!-- GET, so the filters live in the URL: shareable, bookmarkable, kept across pages -->
-    <form th:action="@{/my-urls}" method="get" class="row g-2 align-items-end mb-3" role="search">
-        <div class="col-12 col-md-4">
-            <label for="q" class="form-label small text-muted mb-1">Search</label>
-            <input type="search" class="form-control" id="q" name="q"
-                   th:value="${filter.query}" placeholder="Short key or destination URL">
-        </div>
-        <div class="col-6 col-md-2">
-            <label for="visibility" class="form-label small text-muted mb-1">Visibility</label>
-            <select class="form-select" id="visibility" name="visibility">
-                <option value="all">All</option>
-                <option value="public" th:selected="${filter.visibility.name() == 'PUBLIC'}">Public</option>
-                <option value="private" th:selected="${filter.visibility.name() == 'PRIVATE'}">Private</option>
-            </select>
-        </div>
-        <div class="col-6 col-md-2">
-            <label for="status" class="form-label small text-muted mb-1">Status</label>
-            <select class="form-select" id="status" name="status">
-                <option value="all">All</option>
-                <option value="active" th:selected="${filter.status.name() == 'ACTIVE'}">Active</option>
-                <option value="expired" th:selected="${filter.status.name() == 'EXPIRED'}">Expired</option>
-            </select>
-        </div>
-        <div class="col-6 col-md-2">
-            <label for="sort" class="form-label small text-muted mb-1">Sort by</label>
-            <select class="form-select" id="sort" name="sort">
-                <option value="newest">Newest</option>
-                <option value="oldest" th:selected="${filter.sort.name() == 'OLDEST'}">Oldest</option>
-                <option value="clicks" th:selected="${filter.sort.name() == 'CLICKS'}">Most clicks</option>
-                <option value="expiry" th:selected="${filter.sort.name() == 'EXPIRY'}">Expiring soonest</option>
-            </select>
-        </div>
-        <div class="col-6 col-md-2 d-flex gap-2">
-            <button type="submit" class="btn btn-primary flex-fill">Apply</button>
-            <a th:if="${filter.isCustomised()}" th:href="@{/my-urls}"
-               class="btn btn-outline-secondary">Clear</a>
-        </div>
-    </form>
+    <div th:replace="~{fragments/url-filters :: filterForm('/my-urls', ${filter})}"></div>
+
+    <p th:if="${stats.disabledLinks > 0}" class="text-danger small"
+       th:text="${stats.disabledLinks} + ' of your links ' + (${stats.disabledLinks} == 1 ? 'was' : 'were') + ' disabled by an admin and no longer redirect.'"></p>
 
     <p th:if="${filter.isFiltering()}" class="text-muted small"
        th:text="${shortUrls.totalElements} + ' of ' + ${stats.totalLinks} + ' links match'"></p>

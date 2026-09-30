@@ -28,6 +28,9 @@ public class User {
     private String password;
     @Column(name = "email", nullable = false)
     private String email;
+    @ColumnDefault("true")
+    @Column(name = "enabled", nullable = false)
+    private Boolean enabled = true;
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id", nullable = false)
@@ -88,6 +91,14 @@ public class User {
 
     public Long getId() {
         return id;
+    }
+
+    public Boolean getEnabled() {
+        return enabled;
+    }
+
+    public void setEnabled(Boolean enabled) {
+        this.enabled = enabled;
     }
 
 }

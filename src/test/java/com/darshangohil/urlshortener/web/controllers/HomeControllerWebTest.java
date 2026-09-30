@@ -60,7 +60,7 @@ class HomeControllerWebTest {
     @BeforeEach
     void stubStats() {
         // every My URLs render needs these; individual tests override when they care
-        given(shortUrlService.getUserStats(any())).willReturn(new UserUrlStats(0L, 0L, 0L));
+        given(shortUrlService.getUserStats(any())).willReturn(new UserUrlStats(0L, 0L, 0L, 0L));
     }
 
     @Test
@@ -382,7 +382,7 @@ class HomeControllerWebTest {
     @Test
     void myUrlsShowsTheUsersStats() throws Exception {
         given(shortUrlService.findUrlsByUser(eq(2L), any(), anyInt())).willReturn(TestFixtures.onePage(List.of()));
-        given(shortUrlService.getUserStats(2L)).willReturn(new UserUrlStats(12L, 345L, 9L));
+        given(shortUrlService.getUserStats(2L)).willReturn(new UserUrlStats(12L, 345L, 9L, 0L));
 
         mockMvc.perform(get("/my-urls")
                         .with(user(TestFixtures.principal(2L, "John Doe", Role.ROLE_USER))))
@@ -549,6 +549,30 @@ class HomeControllerWebTest {
     }
 
     @Test
+    void anAdminEditingFromTheDashboardGoesBackThere() throws Exception {
+        given(shortUrlService.getShortUrl(9L)).willReturn(EDITABLE);
+        given(shortUrlService.updateShortUrl(eq(9L), any())).willReturn(EDITABLE);
+        var admin = user(TestFixtures.principal(1L, "Admin User", Role.ROLE_ADMIN));
+
+        mockMvc.perform(get("/my-urls/9/edit").param("from", "admin").with(admin))
+                .andExpect(content().string(containsString("Admin · Links")))
+                .andExpect(content().string(containsString("name=\"from\" value=\"admin\"")));
+        mockMvc.perform(post("/my-urls/9/edit").with(csrf()).with(admin)
+                        .param("from", "admin").param("expiry", "keep"))
+                .andExpect(redirectedUrl("/admin/links"));
+    }
+
+    @Test
+    void anUnknownFromValueIsIgnoredRatherThanFollowed() throws Exception {
+        given(shortUrlService.updateShortUrl(eq(9L), any())).willReturn(EDITABLE);
+
+        mockMvc.perform(post("/my-urls/9/edit").with(csrf())
+                        .with(user(TestFixtures.principal(2L, "John Doe", Role.ROLE_USER)))
+                        .param("from", "https://evil.example").param("expiry", "keep"))
+                .andExpect(redirectedUrl("/my-urls"));
+    }
+
+    @Test
     void choosingDaysWithoutANumberRedisplaysTheForm() throws Exception {
         given(shortUrlService.getShortUrl(9L)).willReturn(EDITABLE);
 
@@ -585,6 +609,23 @@ class HomeControllerWebTest {
         mockMvc.perform(get("/my-urls/9/edit"))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/login"));
+    }
+
+    @Test
+    void ownersAreToldWhenAnAdminDisabledTheirLinks() throws Exception {
+        var disabled = new ShortUrlDto(9L, "mine01", "https://example.com", false, null,
+                new UserDto(2L, "John Doe"), 0L, Instant.now(), true);
+        given(shortUrlService.findUrlsByUser(eq(2L), any(), anyInt())).willReturn(TestFixtures.onePage(List.of(disabled)));
+        given(shortUrlService.getUserStats(2L)).willReturn(new UserUrlStats(1L, 0L, 0L, 1L));
+
+        String html = mockMvc.perform(get("/my-urls")
+                        .with(user(TestFixtures.principal(2L, "John Doe", Role.ROLE_USER))))
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(html).contains("1 of your links was disabled by an admin")
+                .contains(">Disabled</span>")
+                // owners cannot re-enable: the toggle is admin-only
+                .doesNotContain("toggle-row-");
     }
 
     @Test

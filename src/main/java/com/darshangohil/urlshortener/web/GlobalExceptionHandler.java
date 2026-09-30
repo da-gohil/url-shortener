@@ -1,6 +1,7 @@
 package com.darshangohil.urlshortener.web;
 
 import com.darshangohil.urlshortener.domain.exception.ShortUrlNotFoundException;
+import com.darshangohil.urlshortener.domain.exception.UserNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,9 +20,9 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
-    @ExceptionHandler(ShortUrlNotFoundException.class)
-    ModelAndView handleShortUrlNotFoundException(ShortUrlNotFoundException ex){
-        log.warn("Short URL not found: {}", ex.getMessage());
+    @ExceptionHandler({ShortUrlNotFoundException.class, UserNotFoundException.class})
+    ModelAndView handleNotFound(RuntimeException ex){
+        log.warn("Not found: {}", ex.getMessage());
         return new ModelAndView("error/404", HttpStatus.NOT_FOUND);
     }
 

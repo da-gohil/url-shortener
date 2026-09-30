@@ -24,7 +24,8 @@ public class EntityMapper {
                 shortUrl.getExpiresAt(),
                 userDto,
                 shortUrl.getClickCount(),
-                shortUrl.getCreatedAt()
+                shortUrl.getCreatedAt(),
+                Boolean.TRUE.equals(shortUrl.getDisabled())
         );
     }
 

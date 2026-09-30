@@ -1,7 +1,12 @@
 package com.darshangohil.urlshortener.domain.services;
 
+import com.darshangohil.urlshortener.ApplicationProperties;
 import com.darshangohil.urlshortener.domain.entities.User;
+import com.darshangohil.urlshortener.domain.exception.SelfModificationException;
+import com.darshangohil.urlshortener.domain.exception.UserNotFoundException;
+import com.darshangohil.urlshortener.support.TestFixtures;
 import com.darshangohil.urlshortener.domain.exception.EmailAlreadyExistsException;
+import com.darshangohil.urlshortener.domain.models.AuditAction;
 import com.darshangohil.urlshortener.domain.models.CreateUserCmd;
 import com.darshangohil.urlshortener.domain.models.Role;
 import com.darshangohil.urlshortener.domain.repository.UserRepository;
@@ -11,6 +16,8 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.util.Optional;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -18,17 +25,89 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 class UserServiceTest {
 
     private UserRepository userRepository;
+    private ActiveSessions activeSessions;
+    private AuditLog auditLog;
     private UserService service;
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     @BeforeEach
     void setUp() {
         userRepository = mock(UserRepository.class);
-        service = new UserService(userRepository, new EntityMapper(), passwordEncoder);
+        activeSessions = mock(ActiveSessions.class);
+        auditLog = mock(AuditLog.class);
+        var properties = new ApplicationProperties("http://localhost:8080", 30, false, 10);
+        service = new UserService(userRepository, new EntityMapper(), passwordEncoder,
+                properties, activeSessions, auditLog);
+    }
+
+    // --- admin: roles and accounts (who may call these: UserServiceSecurityTest) -------
+
+    @Test
+    void changingARoleSavesItAndSignsTheUserOut() {
+        User john = givenUser(2L, "John Doe", Role.ROLE_USER);
+
+        service.changeRole(2L, Role.ROLE_ADMIN, 1L);
+
+        assertThat(john.getRole()).isEqualTo(Role.ROLE_ADMIN);
+        verify(activeSessions).endAllFor("john.doe@example.com");
+        verify(auditLog).record(AuditAction.USER_ROLE_CHANGED, 2L,
+                "John Doe <john.doe@example.com>: user → admin");
+    }
+
+    @Test
+    void disablingAnAccountSignsTheUserOut() {
+        User john = givenUser(2L, "John Doe", Role.ROLE_USER);
+
+        service.setEnabled(2L, false, 1L);
+
+        assertThat(john.getEnabled()).isFalse();
+        verify(activeSessions).endAllFor("john.doe@example.com");
+        verify(auditLog).record(AuditAction.USER_DISABLED, 2L, "John Doe <john.doe@example.com>");
+    }
+
+    @Test
+    void reEnablingLeavesSessionsAlone() {
+        User john = givenUser(2L, "John Doe", Role.ROLE_USER);
+        john.setEnabled(false);
+
+        service.setEnabled(2L, true, 1L);
+
+        assertThat(john.getEnabled()).isTrue();
+        verify(activeSessions, never()).endAllFor(any());
+    }
+
+    @Test
+    void anAdminCannotDemoteOrDisableThemselves() {
+        User admin = givenUser(1L, "Admin User", Role.ROLE_ADMIN);
+
+        assertThatThrownBy(() -> service.changeRole(1L, Role.ROLE_USER, 1L))
+                .isInstanceOf(SelfModificationException.class);
+        assertThatThrownBy(() -> service.setEnabled(1L, false, 1L))
+                .isInstanceOf(SelfModificationException.class);
+
+        assertThat(admin.getRole()).isEqualTo(Role.ROLE_ADMIN);
+        assertThat(admin.getEnabled()).isTrue();
+        verify(activeSessions, never()).endAllFor(any());
+        verifyNoInteractions(auditLog);
+    }
+
+    @Test
+    void changingAnUnknownUserIsNotFound() {
+        given(userRepository.findById(99L)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.setEnabled(99L, false, 1L))
+                .isInstanceOf(UserNotFoundException.class);
+    }
+
+    private User givenUser(Long id, String name, Role role) {
+        User user = TestFixtures.user(id, name, role);
+        given(userRepository.findById(id)).willReturn(Optional.of(user));
+        return user;
     }
 
     @Test

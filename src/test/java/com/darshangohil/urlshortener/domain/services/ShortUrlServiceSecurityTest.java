@@ -4,6 +4,7 @@ import com.darshangohil.urlshortener.ApplicationProperties;
 import com.darshangohil.urlshortener.config.MethodSecurityConfig;
 import com.darshangohil.urlshortener.domain.entities.ShortUrl;
 import com.darshangohil.urlshortener.domain.entities.User;
+import com.darshangohil.urlshortener.domain.models.OwnerFilter;
 import com.darshangohil.urlshortener.domain.models.Role;
 import com.darshangohil.urlshortener.domain.models.ShortUrlFilter;
 import com.darshangohil.urlshortener.domain.models.UpdateShortUrlCmd;
@@ -48,7 +49,7 @@ class ShortUrlServiceSecurityTest {
 
     @Configuration
     @Import({MethodSecurityConfig.class, ShortUrlService.class, ShortUrlPermissions.class,
-            EntityMapper.class})
+            EntityMapper.class, AdminOverviewService.class})
     static class Config {
         @Bean
         ApplicationProperties applicationProperties() {
@@ -57,9 +58,11 @@ class ShortUrlServiceSecurityTest {
     }
 
     @Autowired ShortUrlService service;
+    @Autowired AdminOverviewService overviewService;
     @Autowired RoleHierarchy roleHierarchy;
     @MockitoBean ShortUrlRepository shortUrlRepository;
     @MockitoBean UserRepository userRepository;
+    @MockitoBean AuditLog auditLog;
     @MockitoBean UrlExistenceValidator urlExistenceValidator;
 
     private final User admin = TestFixtures.user(1L, "Admin User", Role.ROLE_ADMIN);
@@ -94,16 +97,16 @@ class ShortUrlServiceSecurityTest {
     @Test
     void anAdminCanListEveryUrl() {
         signInAs(admin);
-        given(shortUrlRepository.findAllShortUrls(any(Pageable.class))).willReturn(Page.empty());
+        given(shortUrlRepository.findAll(anySpec(), any(Pageable.class))).willReturn(Page.empty());
 
-        assertThatNoException().isThrownBy(() -> service.findAllShortUrls(1));
+        assertThatNoException().isThrownBy(() -> service.findAllShortUrls(ShortUrlFilter.NONE, OwnerFilter.ANYONE, 1));
     }
 
     @Test
     void aUserCannotListEveryUrl() {
         signInAs(owner);
 
-        assertThatThrownBy(() -> service.findAllShortUrls(1))
+        assertThatThrownBy(() -> service.findAllShortUrls(ShortUrlFilter.NONE, OwnerFilter.ANYONE, 1))
                 .isInstanceOf(AccessDeniedException.class);
     }
 
@@ -183,6 +186,28 @@ class ShortUrlServiceSecurityTest {
         givenLink(TestFixtures.shortUrl(1L, "guest1", false, null));
 
         assertThatNoException().isThrownBy(() -> service.updateShortUrl(1L, KEEP_ALL));
+    }
+
+    // --- overview --------------------------------------------------------------------
+
+    @Test
+    void onlyAnAdminCanSeeTheOverview() {
+        signInAs(owner);
+
+        assertThatThrownBy(() -> overviewService.getOverview()).isInstanceOf(AccessDeniedException.class);
+    }
+
+    // --- disabling -------------------------------------------------------------------
+
+    @Test
+    void onlyAnAdminCanDisableALink() {
+        givenLink(TestFixtures.shortUrl(1L, "mine01", false, owner));
+
+        signInAs(owner);
+        assertThatThrownBy(() -> service.setDisabled(1L, false)).isInstanceOf(AccessDeniedException.class);
+
+        signInAs(admin);
+        assertThatNoException().isThrownBy(() -> service.setDisabled(1L, true));
     }
 
     // --- deleting -------------------------------------------------------------------

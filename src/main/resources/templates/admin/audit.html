@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}"
+>
+
+<head>
+    <title>Admin · Audit log</title>
+</head>
+
+<body>
+<div layout:fragment="content">
+    <h1 class="mt-4 h3">Admin Dashboard</h1>
+    <ul th:replace="~{fragments/admin-nav :: adminNav(${adminTab})}"></ul>
+
+    <p class="text-muted small">
+        Every edit, delete, disable and role change, newest first. Entries are written in
+        the same transaction as the change and are never edited.
+    </p>
+
+    <div th:if="${events.data.isEmpty()}" class="alert alert-info">Nothing has been changed yet.</div>
+
+    <div th:unless="${events.data.isEmpty()}" class="table-responsive">
+        <table class="table table-sm table-hover align-middle">
+            <thead>
+            <tr>
+                <th>When</th>
+                <th>Who</th>
+                <th>Action</th>
+                <th>Details</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="e : ${events.data}">
+                <td class="text-nowrap" th:text="${#temporals.format(e.occurredAt, 'yyyy-MM-dd HH:mm')}"></td>
+                <td class="text-nowrap" th:text="${e.actorEmail}"></td>
+                <td class="text-nowrap">
+                    <span class="badge border"
+                          th:classappend="${e.targetType == 'USER'} ? 'bg-light text-primary' : 'bg-light text-dark'"
+                          th:text="${e.action.label()}"></span>
+                </td>
+                <td class="text-break">
+                    <span th:text="${e.summary}"></span>
+                    <a th:if="${e.targetType == 'USER'}" th:href="@{/admin/links(owner=${e.targetId})}"
+                       class="small ms-1">their links</a>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div th:replace="~{fragments/pagination :: pager(${events}, ${paginationUrl})}"></div>
+</div>
+</body>
+</html>

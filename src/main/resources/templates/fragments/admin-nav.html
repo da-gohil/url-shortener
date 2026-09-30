@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<!-- Tabs across the admin pages; `active` is the current tab's key. -->
+<ul th:fragment="adminNav(active)" class="nav nav-tabs mt-4 mb-3">
+    <li class="nav-item">
+        <a class="nav-link" th:href="@{/admin/dashboard}"
+           th:classappend="${active == 'overview'} ? 'active'"
+           th:attrappend="aria-current=${active == 'overview'} ? 'page'">Overview</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" th:href="@{/admin/links}"
+           th:classappend="${active == 'links'} ? 'active'"
+           th:attrappend="aria-current=${active == 'links'} ? 'page'">Links</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" th:href="@{/admin/users}"
+           th:classappend="${active == 'users'} ? 'active'"
+           th:attrappend="aria-current=${active == 'users'} ? 'page'">Users</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" th:href="@{/admin/audit}"
+           th:classappend="${active == 'audit'} ? 'active'"
+           th:attrappend="aria-current=${active == 'audit'} ? 'page'">Audit log</a>
+    </li>
+</ul>
+
+</body>
+</html>

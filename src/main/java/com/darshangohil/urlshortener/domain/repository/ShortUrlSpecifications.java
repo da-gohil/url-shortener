@@ -1,6 +1,7 @@
 package com.darshangohil.urlshortener.domain.repository;
 
 import com.darshangohil.urlshortener.domain.entities.ShortUrl;
+import com.darshangohil.urlshortener.domain.models.OwnerFilter;
 import com.darshangohil.urlshortener.domain.models.ShortUrlFilter;
 import org.springframework.data.jpa.domain.Specification;
 
@@ -19,6 +20,18 @@ public final class ShortUrlSpecifications {
         return (root, query, cb) -> cb.equal(root.get("createdBy").get("id"), userId);
     }
 
+    public static Specification<ShortUrl> createdByGuest() {
+        return (root, query, cb) -> cb.isNull(root.get("createdBy"));
+    }
+
+    public static Specification<ShortUrl> ownedBy(OwnerFilter owner) {
+        return switch (owner.kind()) {
+            case ANYONE -> Specification.unrestricted();
+            case GUESTS -> createdByGuest();
+            case USER -> ownedBy(owner.userId());
+        };
+    }
+
     /** Every restriction the filter asks for; its sort order is applied separately. */
     public static Specification<ShortUrl> matching(ShortUrlFilter filter, Instant now) {
         List<Specification<ShortUrl>> parts = new ArrayList<>();
@@ -31,11 +44,14 @@ public final class ShortUrlSpecifications {
             case ALL -> { }
         }
         switch (filter.status()) {
-            case ACTIVE -> parts.add((root, query, cb) -> cb.or(
-                    cb.isNull(root.get("expiresAt")),
-                    cb.greaterThan(root.get("expiresAt"), now)));
-            case EXPIRED -> parts.add((root, query, cb) ->
-                    cb.lessThanOrEqualTo(root.get("expiresAt"), now));
+            case ACTIVE -> parts.add((root, query, cb) -> cb.and(
+                    cb.isFalse(root.get("disabled")),
+                    cb.or(cb.isNull(root.get("expiresAt")),
+                          cb.greaterThan(root.get("expiresAt"), now))));
+            case EXPIRED -> parts.add((root, query, cb) -> cb.and(
+                    cb.isFalse(root.get("disabled")),
+                    cb.lessThanOrEqualTo(root.get("expiresAt"), now)));
+            case DISABLED -> parts.add((root, query, cb) -> cb.isTrue(root.get("disabled")));
             case ALL -> { }
         }
         return Specification.allOf(parts);

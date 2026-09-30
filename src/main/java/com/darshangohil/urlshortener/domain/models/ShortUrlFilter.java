@@ -15,7 +15,8 @@ public record ShortUrlFilter(String query, Visibility visibility, Status status,
 
     public enum Visibility { ALL, PUBLIC, PRIVATE }
 
-    public enum Status { ALL, ACTIVE, EXPIRED }
+    /** ACTIVE, EXPIRED and DISABLED don't overlap: a disabled link is only DISABLED. */
+    public enum Status { ALL, ACTIVE, EXPIRED, DISABLED }
 
     public enum SortOrder {
         NEWEST(Sort.by(Sort.Order.desc("createdAt"))),
