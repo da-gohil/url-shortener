@@ -16,6 +16,7 @@ import com.darshangohil.urlshortener.domain.services.ShortUrlService;
 import com.darshangohil.urlshortener.domain.services.UserService;
 import com.darshangohil.urlshortener.web.utils.FilterLinks;
 import com.darshangohil.urlshortener.web.utils.SecurityUtils;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -31,11 +32,13 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Everything here is behind {@code hasRole("ADMIN")} in SecurityConfig, and the service
- * methods it calls re-check that with {@code @PreAuthorize}.
+ * Everything here is behind {@code hasRole("ADMIN")} three times over: the {@code /admin/**}
+ * rule in SecurityConfig, the {@code @PreAuthorize} on this class, and the same check on the
+ * service methods it calls.
  */
 @Controller
 @RequestMapping("/admin")
+@PreAuthorize("hasRole('ADMIN')")
 public class AdminController {
 
     private final ShortUrlService shortUrlService;
