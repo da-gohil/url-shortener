@@ -11,7 +11,7 @@ A URL shortener built with Spring Boot, Spring Security, Spring Data JPA, Thymel
 - Short links redirect to their destination, and each visit counts a click. Clicks are counted with an atomic database update, so simultaneous visits aren't lost.
 
 ### For signed-in users
-- **Registration and login.** Passwords are hashed with BCrypt.
+- **Registration and login.** Passwords are hashed with BCrypt. A new account is signed in straight away and lands on My URLs, with a fresh session that an admin can end like any other. Every sign-up is recorded in the audit log.
 - **Private links** that only their owner can open. For anyone else, a private link returns the same 404 as an unknown key, so it can't be discovered by guessing.
 - **Custom expiry** in days, or never.
 - **My URLs page:**
@@ -41,6 +41,7 @@ Admins can do everything a user can (role hierarchy `ADMIN > USER`), plus:
   - Sites flagged by Google Safe Browsing, if you configure an API key.
 - **Rate limits:**
   - Link creation: 10 attempts an hour per IP for guests, 100 per account for signed-in users.
+  - Registration: 5 attempts an hour per IP. Only attempts that pass form validation count, so typos don't use the allowance up.
   - Sign-in: locked for 15 minutes after 5 failures for one email or 20 from one IP. The lockout message doesn't reveal whether the account exists.
 - **Password rules:**
   - 8 characters to 72 bytes (BCrypt's real limit, since emoji and accented letters take several bytes each).
@@ -118,6 +119,7 @@ All settings live in `src/main/resources/application.properties`, and any of the
 | `app.rate-limit.login-failures-per-account` | `5` | Failed sign-ins for one email before it's locked. |
 | `app.rate-limit.login-failures-per-ip` | `20` | Failed sign-ins from one IP before it's locked. |
 | `app.rate-limit.login-lockout-minutes` | `15` | How long a lock lasts. |
+| `app.rate-limit.registrations-per-ip-per-hour` | `5` | Registration attempts per IP that pass form validation. |
 
 ## Project layout
 
@@ -147,4 +149,6 @@ This is a portfolio project, and a few things would need more work for productio
 - **Behind a reverse proxy,** set `server.forward-headers-strategy=native` so rate limits see real client IPs.
 - **DNS rebinding.** A host can resolve to a public address during the SSRF check and a private one when the connection is made. Closing that gap needs an outbound proxy.
 - **Per-account lockout can be abused.** Someone who knows an email address can lock that account out for 15 minutes.
+- **Email addresses aren't verified.** A new account works immediately, so anyone can register with an address they don't own. Verification would need an SMTP server and confirmation tokens.
+- **Registration says when an email is taken.** That tells a visitor the address has an account (sign-in doesn't). Without email verification there's no other way to tell someone why they can't register; the per-IP limit caps how fast addresses can be probed.
 - **Common passwords come from a short bundled list.** A production system would check a breached-password service instead.

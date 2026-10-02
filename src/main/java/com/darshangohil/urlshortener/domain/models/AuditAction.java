@@ -6,6 +6,7 @@ public enum AuditAction {
     LINK_DELETED("LINK", "Deleted link"),
     LINK_DISABLED("LINK", "Disabled link"),
     LINK_ENABLED("LINK", "Re-enabled link"),
+    USER_REGISTERED("USER", "Registered"),
     USER_ROLE_CHANGED("USER", "Changed role"),
     USER_DISABLED("USER", "Disabled account"),
     USER_ENABLED("USER", "Re-enabled account");

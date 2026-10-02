@@ -13,6 +13,7 @@ import com.darshangohil.urlshortener.domain.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -21,6 +22,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -117,7 +119,7 @@ class UserServiceTest {
         service.registerUser(new CreateUserCmd("New User", "New.User@Example.com", "s3cretpassword"));
 
         var captor = ArgumentCaptor.forClass(User.class);
-        verify(userRepository).save(captor.capture());
+        verify(userRepository).saveAndFlush(captor.capture());
         User saved = captor.getValue();
 
         assertThat(saved.getName()).isEqualTo("New User");
@@ -135,7 +137,7 @@ class UserServiceTest {
         service.registerUser(new CreateUserCmd("Sneaky", "sneaky@example.com", "s3cretpassword"));
 
         var captor = ArgumentCaptor.forClass(User.class);
-        verify(userRepository).save(captor.capture());
+        verify(userRepository).saveAndFlush(captor.capture());
         assertThat(captor.getValue().getRole()).isNotEqualTo(Role.ROLE_ADMIN);
     }
 
@@ -146,6 +148,28 @@ class UserServiceTest {
         assertThatThrownBy(() -> service.registerUser(
                 new CreateUserCmd("Dup", "  TAKEN@example.com ", "s3cretpassword")))
                 .isInstanceOf(EmailAlreadyExistsException.class);
-        verify(userRepository, never()).save(any());
+        verify(userRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void aDuplicateThatSlipsPastTheCheckIsStillReportedAsADuplicate() {
+        // two sign-ups for one email at once: both pass the exists check, and the
+        // second insert hits the unique constraint
+        given(userRepository.existsByEmailIgnoreCase(any())).willReturn(false);
+        given(userRepository.saveAndFlush(any())).willThrow(new DataIntegrityViolationException("users_email_key"));
+
+        assertThatThrownBy(() -> service.registerUser(
+                new CreateUserCmd("Racer", "racer@example.com", "s3cretpassword")))
+                .isInstanceOf(EmailAlreadyExistsException.class);
+        verifyNoInteractions(auditLog);
+    }
+
+    @Test
+    void registrationIsAudited() {
+        given(userRepository.existsByEmailIgnoreCase(any())).willReturn(false);
+
+        service.registerUser(new CreateUserCmd(" New User ", "New.User@Example.com", "s3cretpassword"));
+
+        verify(auditLog).record(eq(AuditAction.USER_REGISTERED), any(), eq("New User <new.user@example.com>"));
     }
 }

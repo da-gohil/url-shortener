@@ -17,7 +17,7 @@ class LoginThrottleTest {
 
     private final FixedWindowRateLimiterTest.TestClock clock = new FixedWindowRateLimiterTest.TestClock();
     // 3 failures per account, 5 per IP, locked for 15 minutes
-    private final LoginThrottle throttle = new LoginThrottle(new RateLimitProperties(10, 100, 3, 5, 15), clock);
+    private final LoginThrottle throttle = new LoginThrottle(new RateLimitProperties(10, 100, 3, 5, 15, 5), clock);
 
     @Test
     void anAccountIsLockedAfterItsFailures() {

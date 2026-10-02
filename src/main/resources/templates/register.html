@@ -19,6 +19,9 @@
                 </div>
                 <div class="card-body">
                     <form th:action="@{/register}" method="post" th:object="${registerForm}" novalidate>
+                        <div class="alert alert-danger" role="alert" th:if="${#fields.hasGlobalErrors()}">
+                            <span th:each="err : ${#fields.globalErrors()}" th:text="${err}"></span>
+                        </div>
                         <div class="mb-3">
                             <label for="name" class="form-label">Name</label>
                             <input type="text" class="form-control" id="name" th:field="*{name}"
@@ -30,7 +33,7 @@
                         <div class="mb-3">
                             <label for="email" class="form-label">Email</label>
                             <input type="email" class="form-control" id="email" th:field="*{email}"
-                                   th:errorclass="is-invalid" autocomplete="username" required
+                                   th:errorclass="is-invalid" autocomplete="username" required maxlength="255"
                                    th:attr="aria-describedby=${#fields.hasErrors('email')} ? 'emailError' : null">
                             <div id="emailError" class="invalid-feedback" th:if="${#fields.hasErrors('email')}"
                                  th:errors="*{email}"></div>
