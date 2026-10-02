@@ -6,6 +6,7 @@ import com.darshangohil.urlshortener.domain.exception.UserNotFoundException;
 import com.darshangohil.urlshortener.domain.models.AuditAction;
 import com.darshangohil.urlshortener.domain.models.PagedResult;
 import com.darshangohil.urlshortener.domain.models.UserSummary;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import com.darshangohil.urlshortener.domain.entities.User;
@@ -134,7 +135,14 @@ public class UserService {
         user.setRole(Role.ROLE_USER);
         user.setCreatedAt(OffsetDateTime.now());
 
-        userRepository.save(user);
+        try {
+            userRepository.saveAndFlush(user);
+        } catch (DataIntegrityViolationException e) {
+            // a second registration for the same email got in between the check above
+            // and this insert; the unique constraint on email caught it
+            throw new EmailAlreadyExistsException("Email already registered: " + email);
+        }
+        auditLog.record(AuditAction.USER_REGISTERED, user.getId(), who(user));
         return entityMapper.toUserDto(user);
     }
 }

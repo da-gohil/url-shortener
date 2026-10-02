@@ -6,9 +6,13 @@ import com.darshangohil.urlshortener.web.security.LoginThrottle;
 import com.darshangohil.urlshortener.config.SecurityConfig;
 import com.darshangohil.urlshortener.domain.exception.EmailAlreadyExistsException;
 import com.darshangohil.urlshortener.domain.models.CreateUserCmd;
+import com.darshangohil.urlshortener.domain.models.Role;
 import com.darshangohil.urlshortener.domain.models.UserDto;
 import com.darshangohil.urlshortener.domain.services.PasswordPolicy;
 import com.darshangohil.urlshortener.domain.services.UserService;
+import com.darshangohil.urlshortener.support.TestFixtures;
+import com.darshangohil.urlshortener.web.security.RegistrationLimiter;
+import com.darshangohil.urlshortener.web.security.RegistrationSignIn;
 import com.darshangohil.urlshortener.web.utils.SecurityUtils;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -18,25 +22,32 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(AuthController.class)
 @EnableConfigurationProperties(RateLimitProperties.class)
-@Import({SecurityConfig.class, MethodSecurityConfig.class, SecurityUtils.class, LoginThrottle.class, PasswordPolicy.class})
+@Import({SecurityConfig.class, MethodSecurityConfig.class, SecurityUtils.class, LoginThrottle.class, PasswordPolicy.class,
+        RegistrationLimiter.class})
 class AuthControllerWebTest {
 
     @Autowired MockMvc mockMvc;
     @MockitoBean UserService userService;
+    // signing in for real needs the session registry and a database: RegistrationIntegrationTest
+    @MockitoBean RegistrationSignIn registrationSignIn;
 
     @Test
     void loginPageIsPublic() throws Exception {
@@ -62,7 +73,7 @@ class AuthControllerWebTest {
     }
 
     @Test
-    void validRegistrationRedirectsToLogin() throws Exception {
+    void validRegistrationSignsTheUserInAndOpensMyUrls() throws Exception {
         given(userService.registerUser(any())).willReturn(new UserDto(5L, "New User"));
 
         mockMvc.perform(post("/register").with(csrf())
@@ -71,13 +82,95 @@ class AuthControllerWebTest {
                         .param("password", "s3cretpassword")
                         .param("confirmPassword", "s3cretpassword"))
                 .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl("/login"))
-                .andExpect(flash().attribute("successMessage",
-                        containsString("Account created")));
+                .andExpect(redirectedUrl("/my-urls"))
+                .andExpect(flash().attribute("successMessage", "Welcome, New User! Your account is ready."));
 
         var captor = ArgumentCaptor.forClass(CreateUserCmd.class);
         verify(userService).registerUser(captor.capture());
         assertThat(captor.getValue().email()).isEqualTo("new.user@example.com");
+        verify(registrationSignIn).signIn(eq("new.user@example.com"), any(), any());
+    }
+
+    @Test
+    void aSignedInUserIsSentToMyUrlsInsteadOfTheRegisterPage() throws Exception {
+        var member = user(TestFixtures.principal(3L, "Signed In", Role.ROLE_USER));
+
+        mockMvc.perform(get("/register").with(member))
+                .andExpect(redirectedUrl("/my-urls"));
+        mockMvc.perform(post("/register").with(csrf()).with(member)
+                        .param("name", "Second Account")
+                        .param("email", "second@example.com")
+                        .param("password", "s3cretpassword")
+                        .param("confirmPassword", "s3cretpassword"))
+                .andExpect(redirectedUrl("/my-urls"));
+        verify(userService, never()).registerUser(any());
+    }
+
+    @Test
+    void anEmailTooLongForTheDatabaseIsAFormError() throws Exception {
+        // a well-formed address of 308 characters; the column holds 255, so this used to be a 500
+        String email = "a".repeat(60) + "@" + ("b".repeat(60) + ".").repeat(4) + "com";
+
+        mockMvc.perform(post("/register").with(csrf())
+                        .param("name", "New User")
+                        .param("email", email)
+                        .param("password", "s3cretpassword")
+                        .param("confirmPassword", "s3cretpassword"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Email must be at most 255 characters")));
+        verify(userService, never()).registerUser(any());
+    }
+
+    @Test
+    void tooManySignUpsFromOneAddressAreRefused() throws Exception {
+        given(userService.registerUser(any())).willReturn(new UserDto(5L, "New User"));
+        // an address of its own, so other tests' sign-ups don't count towards this limit
+        RequestPostProcessor fromOneAddress = request -> {
+            request.setRemoteAddr("203.0.113.7");
+            return request;
+        };
+        for (int i = 0; i < 5; i++) {
+            mockMvc.perform(post("/register").with(csrf()).with(fromOneAddress)
+                            .param("name", "New User")
+                            .param("email", "user" + i + "@example.com")
+                            .param("password", "s3cretpassword")
+                            .param("confirmPassword", "s3cretpassword"))
+                    .andExpect(redirectedUrl("/my-urls"));
+        }
+
+        mockMvc.perform(post("/register").with(csrf()).with(fromOneAddress)
+                        .param("name", "New User")
+                        .param("email", "user5@example.com")
+                        .param("password", "s3cretpassword")
+                        .param("confirmPassword", "s3cretpassword"))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(view().name("register"))
+                .andExpect(content().string(containsString("Too many sign-ups from your network")));
+        verify(userService, times(5)).registerUser(any());
+    }
+
+    @Test
+    void invalidAttemptsDoNotCountTowardsTheSignUpLimit() throws Exception {
+        RequestPostProcessor fromOneAddress = request -> {
+            request.setRemoteAddr("203.0.113.8");
+            return request;
+        };
+        for (int i = 0; i < 6; i++) {
+            mockMvc.perform(post("/register").with(csrf()).with(fromOneAddress)
+                            .param("name", "New User")
+                            .param("email", "new.user@example.com")
+                            .param("password", "s3cretpassword")
+                            .param("confirmPassword", "typo"))
+                    .andExpect(status().isOk());
+        }
+        given(userService.registerUser(any())).willReturn(new UserDto(5L, "New User"));
+
+        mockMvc.perform(post("/register").with(csrf()).with(fromOneAddress)
+                        .param("name", "New User")
+                        .param("email", "new.user@example.com")
+                        .param("password", "s3cretpassword")
+                        .param("confirmPassword", "s3cretpassword"))
+                .andExpect(redirectedUrl("/my-urls"));
     }
 
     @Test

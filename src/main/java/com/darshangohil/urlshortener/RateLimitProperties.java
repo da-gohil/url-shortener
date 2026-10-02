@@ -6,7 +6,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 import org.springframework.validation.annotation.Validated;
 
 /**
- * Limits on link creation and failed sign-ins. Counted in memory, so they apply per
+ * Limits on link creation, registration and failed sign-ins. Counted in memory, so they apply per
  * app instance.
  */
 @ConfigurationProperties(prefix = "app.rate-limit")
@@ -21,5 +21,7 @@ public record RateLimitProperties(
         /* failed sign-ins from one IP address before it is locked */
         @DefaultValue("20") @Min(1) int loginFailuresPerIp,
         /* how long both kinds of lock last, and the window failures are counted in */
-        @DefaultValue("15") @Min(1) int loginLockoutMinutes) {
+        @DefaultValue("15") @Min(1) int loginLockoutMinutes,
+        /* registration attempts per hour from one IP address that pass form validation */
+        @DefaultValue("5") @Min(1) int registrationsPerIpPerHour) {
 }
